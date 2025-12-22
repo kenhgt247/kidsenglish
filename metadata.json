@@ -1,0 +1,7 @@
+{
+  "name": "Dino English Adventure",
+  "description": "An interactive, high-fidelity English learning game for children featuring the 'Feed the Dino' module.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
