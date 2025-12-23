@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -38,7 +37,7 @@ const MemoryMatch: React.FC = () => {
         addScore(50);
         if (matched.length + 2 === cards.length) {
           setIsVictory(true);
-          unlockLevel(25);
+          unlockLevel(24);
         }
       } else {
         setTimeout(() => setFlipped([]), 1000);

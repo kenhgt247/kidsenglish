@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -67,7 +66,7 @@ const ColorLab: React.FC = () => {
       addScore(100);
       const n = progress + 1;
       setProgress(n);
-      if (n >= 3) { setIsVictory(true); unlockLevel(1); } // Quay lại 1 hoặc kết thúc
+      if (n >= 3) { setIsVictory(true); unlockLevel(27); }
       else nextRound();
     }
   };

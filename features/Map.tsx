@@ -50,12 +50,12 @@ const Map: React.FC = () => {
     { id: 19, title: "Kitchen Chef", route: "/game/chef", x: 326, y: 75, theme: 'farm', icon: '👨‍🍳' },
     { id: 20, title: "Traffic Hero", route: "/game/traffic", x: 344, y: 55, theme: 'city', icon: '🚦' },
     { id: 21, title: "Size Lab", route: "/game/size", x: 362, y: 70, theme: 'space', icon: '📐' },
-    { id: 22, title: "Dino Finale", route: "/game/finale", x: 380, y: 45, theme: 'sky', icon: '⭐' },
-    { id: 23, title: "Sound Studio", route: "/game/music", x: 398, y: 65, theme: 'city', icon: '🎸' },
-    { id: 24, title: "Dino Match", route: "/game/memory", x: 416, y: 45, theme: 'jungle', icon: '🧠' },
-    { id: 25, title: "Body Map", route: "/game/body", x: 434, y: 70, theme: 'farm', icon: '🦵' },
-    { id: 26, title: "Verb Run", route: "/game/verbs", x: 452, y: 50, theme: 'jungle', icon: '🏃' },
-    { id: 27, title: "Color Lab", route: "/game/colorlab", x: 470, y: 65, theme: 'space', icon: '🧪' },
+    { id: 22, title: "Sound Studio", route: "/game/music", x: 380, y: 45, theme: 'city', icon: '🎸' },
+    { id: 23, title: "Dino Match", route: "/game/memory", x: 398, y: 65, theme: 'jungle', icon: '🧠' },
+    { id: 24, title: "Body Map", route: "/game/body", x: 416, y: 45, theme: 'farm', icon: '🦵' },
+    { id: 25, title: "Verb Run", route: "/game/verbs", x: 434, y: 70, theme: 'jungle', icon: '🏃' },
+    { id: 26, title: "Color Lab", route: "/game/colorlab", x: 452, y: 50, theme: 'space', icon: '🧪' },
+    { id: 27, title: "Dino Finale", route: "/game/finale", x: 470, y: 65, theme: 'sky', icon: '⭐' },
   ];
 
   const unlocked = state.unlockedLevels || [1];

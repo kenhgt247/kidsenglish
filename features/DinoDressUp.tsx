@@ -51,6 +51,7 @@ const DinoDressUp: React.FC = () => {
   const [dressedItems, setDressedItems] = useState<string[]>([]);
   const [isVictory, setIsVictory] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isNearTarget, setIsNearTarget] = useState(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const dinoContainerRef = useRef<HTMLDivElement>(null);
 
@@ -94,8 +95,19 @@ const DinoDressUp: React.FC = () => {
     if (!isVictory) speak(currentTarget.label.toLowerCase());
   }, [currentTarget]);
 
+  const checkProximity = (point: { x: number, y: number }) => {
+    const dinoRect = dinoContainerRef.current?.getBoundingClientRect();
+    if (!dinoRect) return;
+    const threshold = 150; // slightly larger for feedback
+    const dinoCenterX = dinoRect.left + dinoRect.width / 2;
+    const dinoCenterY = dinoRect.top + dinoRect.height / 2;
+    const distance = Math.sqrt(Math.pow(point.x - dinoCenterX, 2) + Math.pow(point.y - dinoCenterY, 2));
+    setIsNearTarget(distance < threshold);
+  };
+
   const handleDragEnd = (event: any, info: any, item: any) => {
     initAudioContext().resume();
+    setIsNearTarget(false);
     if (item.id !== currentTarget.id) return;
     const dinoRect = dinoContainerRef.current?.getBoundingClientRect();
     if (!dinoRect) return;
@@ -137,6 +149,7 @@ const DinoDressUp: React.FC = () => {
                   key={item.id}
                   drag={!isDressed && isCurrent}
                   dragSnapToOrigin
+                  onDrag={(e, info) => checkProximity(info.point)}
                   onDragEnd={(e, info) => handleDragEnd(e, info, item)}
                   whileHover={!isDressed && isCurrent ? { scale: 1.1 } : {}}
                   whileTap={!isDressed && isCurrent ? { scale: 0.9, rotate: 5 } : {}}
@@ -154,9 +167,30 @@ const DinoDressUp: React.FC = () => {
             <Volume2 className={isSpeaking ? 'animate-bounce' : ''} size={28} />
             PUT ON THE {currentTarget.label}!
           </motion.button>
-          <div ref={dinoContainerRef} className="relative w-64 h-64 md:w-[450px] md:h-[450px] bg-dino-green rounded-[4rem] md:rounded-[6rem] flex items-center justify-center border-[8px] md:border-[12px] border-white shadow-2xl overflow-hidden">
+          
+          <div 
+            ref={dinoContainerRef} 
+            className={`relative w-64 h-64 md:w-[450px] md:h-[450px] bg-dino-green rounded-[4rem] md:rounded-[6rem] flex items-center justify-center border-[8px] md:border-[12px] border-white shadow-2xl transition-all duration-300
+              ${isNearTarget ? 'ring-[16px] ring-sky-300 ring-offset-4' : 'overflow-hidden'}`}
+          >
             <span className="text-[10rem] md:text-[18rem] select-none">🦖</span>
+            
             <AnimatePresence>
+              {/* Ghost Preview */}
+              {isNearTarget && !dressedItems.includes(currentTarget.id) && (
+                <motion.div
+                  key="preview"
+                  initial={{ opacity: 0, scale: 0.5 }}
+                  animate={{ opacity: 0.4, scale: 1.4 }}
+                  exit={{ opacity: 0, scale: 0.5 }}
+                  className="absolute z-10 pointer-events-none grayscale brightness-125"
+                  style={currentTarget.targetPos}
+                >
+                  <span className="text-5xl md:text-7xl">{currentTarget.icon}</span>
+                </motion.div>
+              )}
+
+              {/* Dressed Items */}
               {CLOTHING.map(item => dressedItems.includes(item.id) && (
                 <motion.div key={`dressed-${item.id}`} initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1.4, opacity: 1 }} className="absolute z-20 pointer-events-none drop-shadow-2xl" style={item.targetPos}>
                   <span className="text-5xl md:text-7xl">{item.icon}</span>

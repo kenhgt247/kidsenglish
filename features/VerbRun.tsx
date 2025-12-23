@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -65,7 +64,7 @@ const VerbRun: React.FC = () => {
       addScore(50);
       const n = progress + 1;
       setProgress(n);
-      if (n >= 4) { setIsVictory(true); unlockLevel(27); }
+      if (n >= 4) { setIsVictory(true); unlockLevel(26); }
       else nextRound();
     }
   };
