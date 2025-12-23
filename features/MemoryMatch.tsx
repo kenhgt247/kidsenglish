@@ -64,9 +64,10 @@ const MemoryMatch: React.FC = () => {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Speak in a very clear, friendly British accent for a child: "${text}"` }] }],
+        contents: [{ parts: [{ text: text }] }],
         config: {
           responseModalities: [Modality.AUDIO],
+          systemInstruction: "You are a warm, clear British English teacher for toddlers. Use a friendly UK accent. Speak slowly and clearly.",
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
         },
       });
@@ -88,7 +89,7 @@ const MemoryMatch: React.FC = () => {
 
   useEffect(() => {
     setCards([...CARDS].sort(() => 0.5 - Math.random()));
-    const timer = setTimeout(() => speak("Can you find the matching cards? Touch the squares!"), 1000);
+    const timer = setTimeout(() => speak("Find the matching cards!"), 1000);
     return () => clearTimeout(timer);
   }, []);
 
@@ -120,7 +121,7 @@ const MemoryMatch: React.FC = () => {
       <Confetti active={isVictory} />
       <div className="flex flex-col items-center gap-6 mb-8">
         <h2 className="text-4xl md:text-6xl font-black text-slate-800 uppercase text-center">Dino Memory</h2>
-        <button onClick={() => speak("Find the matching pairs!")} className="bg-white p-4 rounded-full shadow-xl border-4 border-emerald-200 active:scale-95 transition-all">
+        <button onClick={() => speak("Find the pairs!")} className="bg-white p-4 rounded-full shadow-xl border-4 border-emerald-200 active:scale-95 transition-all">
           <Volume2 className={isSpeaking ? "text-emerald-500 animate-pulse" : "text-slate-300"} size={32} />
         </button>
       </div>
@@ -135,7 +136,7 @@ const MemoryMatch: React.FC = () => {
         <div className="fixed inset-0 bg-slate-900/90 z-[150] flex items-center justify-center p-6 text-center">
           <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="bg-white p-10 rounded-[3rem] border-8 border-emerald-400">
             <Brain size={80} className="text-emerald-500 mx-auto mb-4" />
-            <h2 className="text-3xl font-black text-slate-800 uppercase">Brilliant Mind!</h2>
+            <h2 className="text-3xl font-black text-slate-800 uppercase">Super Mind!</h2>
             <button onClick={() => navigate('/map')} className="w-full mt-6 bg-emerald-500 text-white text-2xl font-black py-4 rounded-2xl">MAP</button>
           </motion.div>
         </div>

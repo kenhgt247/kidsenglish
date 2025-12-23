@@ -1,11 +1,10 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Lock, MapPin, Trophy, Sparkles, RotateCcw, Play } from 'lucide-react';
 import { useGame } from '../GameContext.tsx';
 import { Howl } from 'howler';
-
-const jumpSfx = new Howl({ src: ['https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3'], volume: 0.3 });
 
 const Decoration = ({ emoji, x, y, delay = 0, size = "text-3xl md:text-4xl" }: { emoji: string, x: number, y: number, delay?: number, size?: string }) => (
   <motion.div
@@ -22,11 +21,8 @@ const Decoration = ({ emoji, x, y, delay = 0, size = "text-3xl md:text-4xl" }: {
 const Map: React.FC = () => {
   const navigate = useNavigate();
   const { state, unlockAllLevels, resetGame } = useGame();
-  const [isDinoJumping, setIsDinoJumping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  
-  // Adjusted spacing for better mobile layout
-  const spacing = 8.5; // multiplier for X position
+  const spacing = 9.5; 
   
   const levels = [
     { id: 1, title: "Dino Snack", route: "/game/feed", x: 8, y: 70, theme: 'jungle', icon: '🍎' },
@@ -40,22 +36,22 @@ const Map: React.FC = () => {
     { id: 9, title: "Star ABC", route: "/game/space", x: 144, y: 65, theme: 'space', icon: '🪐' },
     { id: 10, title: "Farm Joy", route: "/game/farm", x: 162, y: 45, theme: 'farm', icon: '🐮' },
     { id: 11, title: "Rainbow Sky", route: "/game/rainbow", x: 180, y: 70, theme: 'sky', icon: '🌈' },
-    { id: 12, title: "Dino Style", route: "/game/dressup", x: 200, y: 50, theme: 'city', icon: '👕' },
-    { id: 13, title: "Magic Math", route: "/game/math", x: 218, y: 75, theme: 'space', icon: '➕' },
-    { id: 14, title: "Weather", route: "/game/weather", x: 236, y: 55, theme: 'sky', icon: '☀️' },
-    { id: 15, title: "Bug Hunter", route: "/game/bugs", x: 254, y: 70, theme: 'jungle', icon: '🐞' },
-    { id: 16, title: "Daily Fun", route: "/game/routine", x: 272, y: 50, theme: 'city', icon: '🪥' },
-    { id: 17, title: "Plurals", route: "/game/plurals", x: 290, y: 70, theme: 'farm', icon: '🧺' },
-    { id: 18, title: "Pet Parlor", route: "/game/parlor", x: 308, y: 50, theme: 'jungle', icon: '🐶' },
-    { id: 19, title: "Kitchen Chef", route: "/game/chef", x: 326, y: 75, theme: 'farm', icon: '👨‍🍳' },
-    { id: 20, title: "Traffic Hero", route: "/game/traffic", x: 344, y: 55, theme: 'city', icon: '🚦' },
-    { id: 21, title: "Size Lab", route: "/game/size", x: 362, y: 70, theme: 'space', icon: '📐' },
-    { id: 22, title: "Sound Studio", route: "/game/music", x: 380, y: 45, theme: 'city', icon: '🎸' },
-    { id: 23, title: "Dino Match", route: "/game/memory", x: 398, y: 65, theme: 'jungle', icon: '🧠' },
-    { id: 24, title: "Body Map", route: "/game/body", x: 416, y: 45, theme: 'farm', icon: '🦵' },
-    { id: 25, title: "Verb Run", route: "/game/verbs", x: 434, y: 70, theme: 'jungle', icon: '🏃' },
-    { id: 26, title: "Color Lab", route: "/game/colorlab", x: 452, y: 50, theme: 'space', icon: '🧪' },
-    { id: 27, title: "Dino Finale", route: "/game/finale", x: 470, y: 65, theme: 'sky', icon: '⭐' },
+    { id: 12, title: "Dino Style", route: "/game/dressup", x: 198, y: 50, theme: 'city', icon: '👕' },
+    { id: 13, title: "Magic Math", route: "/game/math", x: 216, y: 75, theme: 'space', icon: '➕' },
+    { id: 14, title: "Weather", route: "/game/weather", x: 234, y: 55, theme: 'sky', icon: '☀️' },
+    { id: 15, title: "Bug Hunter", route: "/game/bugs", x: 252, y: 70, theme: 'jungle', icon: '🐞' },
+    { id: 16, title: "Daily Fun", route: "/game/routine", x: 270, y: 50, theme: 'city', icon: '🪥' },
+    { id: 17, title: "Plurals", route: "/game/plurals", x: 288, y: 70, theme: 'farm', icon: '🧺' },
+    { id: 18, title: "Pet Parlor", route: "/game/parlor", x: 306, y: 50, theme: 'jungle', icon: '🐶' },
+    { id: 19, title: "Kitchen Chef", route: "/game/chef", x: 324, y: 75, theme: 'farm', icon: '👨‍🍳' },
+    { id: 20, title: "Traffic Hero", route: "/game/traffic", x: 342, y: 55, theme: 'city', icon: '🚦' },
+    { id: 21, title: "Size Lab", route: "/game/size", x: 360, y: 70, theme: 'space', icon: '📐' },
+    { id: 22, title: "Sound Studio", route: "/game/music", x: 378, y: 45, theme: 'city', icon: '🎸' },
+    { id: 23, title: "Dino Match", route: "/game/memory", x: 396, y: 65, theme: 'jungle', icon: '🧠' },
+    { id: 24, title: "Body Map", route: "/game/body", x: 414, y: 45, theme: 'farm', icon: '🦵' },
+    { id: 25, title: "Verb Run", route: "/game/verbs", x: 432, y: 70, theme: 'jungle', icon: '🏃' },
+    { id: 26, title: "Color Lab", route: "/game/colorlab", x: 450, y: 50, theme: 'space', icon: '🧪' },
+    { id: 27, title: "Dino Finale", route: "/game/finale", x: 468, y: 65, theme: 'sky', icon: '⭐' },
   ];
 
   const unlocked = state.unlockedLevels || [1];
@@ -89,9 +85,7 @@ const Map: React.FC = () => {
 
   return (
     <div ref={scrollRef} className="h-full bg-[#fdfbf7] overflow-x-auto overflow-y-hidden no-scrollbar touch-pan-x">
-      <div className="relative min-w-[4400px] h-full p-4 md:p-8">
-        
-        {/* Header Overlay */}
+      <div className="relative min-w-[4600px] h-full p-4 md:p-8">
         <div className="fixed top-0 left-0 right-0 z-[150] p-4 md:p-6 pointer-events-none">
           <div className="max-w-4xl mx-auto flex gap-3 md:gap-4 items-center bg-white/90 backdrop-blur-xl p-3 md:p-4 rounded-3xl md:rounded-[2rem] border-2 md:border-4 border-slate-100 shadow-xl pointer-events-auto">
             <div className="p-2 md:p-3 bg-emerald-500 rounded-xl md:rounded-2xl text-white shadow-lg"><MapPin size={20} /></div>
@@ -102,7 +96,6 @@ const Map: React.FC = () => {
           </div>
         </div>
 
-        {/* Dino Character */}
         <motion.div
           animate={{ left: `${currentLevel.x * spacing}px`, top: `${currentLevel.y}%`, y: -100, scale: 1 }}
           transition={{ type: "spring", stiffness: 100 }}
@@ -115,7 +108,6 @@ const Map: React.FC = () => {
         {levels.map((level) => {
           const isUnlocked = unlocked.includes(level.id);
           const isCurrent = level.id === maxUnlockedId;
-          
           return (
             <div key={level.id} style={{ left: `${level.x * spacing}px`, top: `${level.y}%` }} className="absolute -translate-x-1/2 -translate-y-1/2 z-10">
               <div className="flex flex-col items-center">
@@ -123,17 +115,12 @@ const Map: React.FC = () => {
                   onClick={() => isUnlocked && navigate(level.route)}
                   whileHover={isUnlocked ? { scale: 1.05, y: -4 } : {}}
                   whileTap={isUnlocked ? { scale: 0.95, y: 4 } : {}}
-                  className={`
-                    w-24 h-24 sm:w-28 sm:h-28 md:w-44 md:h-44 rounded-[2rem] md:rounded-[3rem] flex flex-col items-center justify-center border-4 md:border-8 border-white transition-all relative
-                    ${isUnlocked ? getThemeColor(level.theme) : 'bg-slate-200 text-slate-400 grayscale shadow-none border-slate-300'}
-                  `}
+                  className={`w-24 h-24 sm:w-28 sm:h-28 md:w-44 md:h-44 rounded-[2rem] md:rounded-[3rem] flex flex-col items-center justify-center border-4 md:border-8 border-white transition-all relative ${isUnlocked ? getThemeColor(level.theme) : 'bg-slate-200 text-slate-400 grayscale shadow-none border-slate-300'}`}
                 >
                   {!isUnlocked ? <Lock size={28} /> : (
                     <>
                       <span className="text-3xl md:text-6xl font-black mb-0.5">{level.id}</span>
                       <span className="text-2xl md:text-4xl">{level.icon}</span>
-                      
-                      {/* NÚT PLAY LỚN CHÍNH GIỮA */}
                       {isCurrent && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/10 rounded-[1.8rem] md:rounded-[2.5rem] animate-pulse">
                           <div className="bg-orange-500 p-2 md:p-4 rounded-full shadow-2xl border-2 md:border-4 border-white">
@@ -151,14 +138,6 @@ const Map: React.FC = () => {
             </div>
           );
         })}
-
-        {/* Background Decorations */}
-        <Decoration emoji="🌴" x={spacing * 1} y={65} />
-        <Decoration emoji="🦕" x={spacing * 12} y={35} delay={1} />
-        <Decoration emoji="🌋" x={spacing * 25} y={20} delay={2} />
-        <Decoration emoji="🛸" x={spacing * 38} y={15} delay={3} />
-        <Decoration emoji="☁️" x={spacing * 5} y={10} delay={4} size="text-5xl" />
-        <Decoration emoji="☁️" x={spacing * 18} y={12} delay={2} size="text-6xl" />
       </div>
     </div>
   );
