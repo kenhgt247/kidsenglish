@@ -128,7 +128,7 @@ const ArcticOpposites: React.FC = () => {
     } else {
       failSfx.play();
       setFeedback('incorrect');
-      setTimeout(() => setFeedback(null), 800);
+      setTimeout(() => setFeedback(null), 1000);
     }
   };
 
@@ -149,23 +149,46 @@ const ArcticOpposites: React.FC = () => {
         <motion.div 
           key={currentItem.id}
           animate={
-            feedback === 'correct' ? { scale: [1, 1.2, 1], rotate: [0, 10, -10, 0] } :
-            feedback === 'incorrect' ? { x: [0, -10, 10, -10, 10, 0], scale: [1, 0.95, 1] } :
+            feedback === 'correct' ? { scale: [1, 1.15, 1], rotate: [0, 5, -5, 0] } :
+            feedback === 'incorrect' ? { x: [0, -15, 15, -15, 15, 0], scale: [1, 0.9, 1] } :
             { scale: 1, rotate: 0, x: 0 }
           }
           className={`
-            bg-white w-48 h-48 md:w-80 md:h-80 rounded-[3rem] md:rounded-[5rem] shadow-2xl border-8 flex flex-col items-center justify-center relative shrink-0 transition-colors duration-300
+            bg-white w-48 h-48 md:w-80 md:h-80 rounded-[3rem] md:rounded-[5rem] shadow-2xl border-8 flex flex-col items-center justify-center relative shrink-0 transition-colors duration-300 overflow-hidden
             ${feedback === 'correct' ? 'border-green-400 bg-green-50' : 
               feedback === 'incorrect' ? 'border-red-400 bg-red-50' : 
               'border-blue-100'}
           `}
         >
+          <AnimatePresence>
+            {feedback === 'correct' && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0 }}
+                className="absolute inset-0 bg-green-500/20 flex items-center justify-center z-10"
+              >
+                <CheckCircle2 size={120} className="text-green-500 md:scale-150" />
+              </motion.div>
+            )}
+            {feedback === 'incorrect' && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0 }}
+                className="absolute inset-0 bg-red-500/20 flex items-center justify-center z-10"
+              >
+                <XCircle size={120} className="text-red-500 md:scale-150" />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <div className="text-7xl md:text-[10rem] mb-2 md:mb-6">{currentItem.icon}</div>
           <div className="text-xl md:text-3xl font-black text-blue-900 uppercase tracking-[0.2em]">{currentItem.label}</div>
           
           <button 
             onClick={(e) => { e.stopPropagation(); speak(currentItem.label); }} 
-            className="absolute -bottom-4 -right-4 bg-blue-500 p-4 rounded-full text-white shadow-xl hover:bg-blue-600 active:scale-125 transition-all"
+            className="absolute -bottom-4 -right-4 bg-blue-500 p-4 rounded-full text-white shadow-xl hover:bg-blue-600 active:scale-125 transition-all z-20"
           >
             <Volume2 size={24} className={isSpeaking ? 'animate-pulse' : ''} />
           </button>
@@ -175,7 +198,8 @@ const ArcticOpposites: React.FC = () => {
           <motion.button
             whileTap={{ scale: 0.9 }}
             onClick={() => handleSelect('cold')}
-            className="h-24 md:h-32 rounded-3xl bg-cyan-500 hover:bg-cyan-600 shadow-xl border-4 border-white flex items-center justify-center gap-4 transition-all"
+            disabled={feedback !== null}
+            className={`h-24 md:h-32 rounded-3xl bg-cyan-500 hover:bg-cyan-600 shadow-xl border-4 border-white flex items-center justify-center gap-4 transition-all ${feedback !== null ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
           >
             <ThermometerSnowflake size={36} className="text-white md:scale-150" />
             <span className="text-white text-2xl md:text-4xl font-black uppercase tracking-wider">COLD</span>
@@ -184,7 +208,8 @@ const ArcticOpposites: React.FC = () => {
           <motion.button
             whileTap={{ scale: 0.9 }}
             onClick={() => handleSelect('hot')}
-            className="h-24 md:h-32 rounded-3xl bg-orange-500 hover:bg-orange-600 shadow-xl border-4 border-white flex items-center justify-center gap-4 transition-all"
+            disabled={feedback !== null}
+            className={`h-24 md:h-32 rounded-3xl bg-orange-500 hover:bg-orange-600 shadow-xl border-4 border-white flex items-center justify-center gap-4 transition-all ${feedback !== null ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
           >
             <ThermometerSun size={36} className="text-white md:scale-150" />
             <span className="text-white text-2xl md:text-4xl font-black uppercase tracking-wider">HOT</span>
@@ -197,7 +222,7 @@ const ArcticOpposites: React.FC = () => {
           <motion.div initial={{ scale: 0.8 }} animate={{ scale: 1 }} className="bg-white p-10 rounded-[3rem] shadow-2xl max-w-sm w-full border-8 border-cyan-400 flex flex-col items-center gap-8">
             <div className="text-8xl animate-bounce">🐧</div>
             <h2 className="text-3xl font-black text-blue-900 uppercase">Arctic Hero!</h2>
-            <button onClick={() => navigate('/map')} className="w-full bg-cyan-600 text-white text-2xl font-black py-6 rounded-3xl">GREAT JOB!</button>
+            <button onClick={() => navigate('/map')} className="w-full bg-cyan-600 text-white text-2xl font-black py-6 rounded-3xl shadow-[0_10px_0_0_#0891B2] active:translate-y-1 transition-all">GREAT JOB!</button>
           </motion.div>
         </div>
       )}
