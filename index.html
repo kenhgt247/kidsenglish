@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Dino English Adventure</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
@@ -11,11 +11,15 @@
         font-family: 'Fredoka', sans-serif;
         overflow: hidden;
         user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
         background-color: #f0f9ff;
         margin: 0;
+        touch-action: manipulation;
       }
       #root {
         min-height: 100vh;
+        min-height: 100dvh;
         display: flex;
         flex-direction: column;
       }
@@ -24,25 +28,37 @@
       .bg-dino-green { background-color: #4ADE80; }
       .bg-game-orange { background-color: #FB923C; }
       
-      /* Smooth transitions for all elements */
-      * { transition: background-color 0.3s ease; }
+      /* Disable blue highlight on tap for mobile */
+      * { 
+        -webkit-tap-highlight-color: transparent;
+        transition: background-color 0.3s ease; 
+      }
+
+      /* Hide scrollbars but keep functionality */
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
     </style>
     <script type="importmap">
-    {
-      "imports": {
-        "react": "https://esm.sh/react@18.3.1",
-        "react/": "https://esm.sh/react@18.3.1/",
-        "react-dom": "https://esm.sh/react-dom@18.3.1",
-        "react-dom/": "https://esm.sh/react-dom@18.3.1/",
-        "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
-        "react-router-dom": "https://esm.sh/react-router-dom@6.28.0?deps=react@18.3.1,react-dom@18.3.1",
-        "framer-motion": "https://esm.sh/framer-motion@11.11.17?bundle&deps=react@18.3.1,react-dom@18.3.1",
-        "lucide-react": "https://esm.sh/lucide-react@0.446.0?bundle&deps=react@18.3.1,react-dom@18.3.1",
-        "howler": "https://esm.sh/howler@2.2.4",
-        "@google/genai": "https://esm.sh/@google/genai@0.12.0"
-      }
-    }
-    </script>
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.3.1",
+    "react/": "https://esm.sh/react@18.3.1/",
+    "react-dom": "https://esm.sh/react-dom@18.3.1",
+    "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
+    "react-router-dom": "https://esm.sh/react-router-dom@6.28.0?deps=react@18.3.1,react-dom@18.3.1",
+    "framer-motion": "https://esm.sh/framer-motion@11.11.17?bundle&deps=react@18.3.1,react-dom@18.3.1",
+    "lucide-react": "https://esm.sh/lucide-react@0.446.0?bundle&deps=react@18.3.1,react-dom@18.3.1",
+    "howler": "https://esm.sh/howler@2.2.4",
+    "@google/genai": "https://esm.sh/@google/genai@0.12.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/"
+  }
+}
+</script>
   </head>
   <body>
     <div id="root"></div>

@@ -18,7 +18,7 @@ interface GameContextType {
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
 
-const STORAGE_KEY = 'dino_english_progress';
+const STORAGE_KEY = 'dino_english_progress_v2';
 
 const INITIAL_STATE: ExtendedGameState = {
   score: 0,
@@ -34,10 +34,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // Bảo vệ dữ liệu: Nếu thiếu unlockedLevels (do phiên bản cũ), tự động bổ sung
-        if (!parsed.unlockedLevels || !Array.isArray(parsed.unlockedLevels)) {
-          parsed.unlockedLevels = [1];
-        }
+        if (!parsed.unlockedLevels) parsed.unlockedLevels = [1];
         return parsed;
       } catch (e) {
         console.error("Failed to parse saved game state", e);
@@ -63,17 +60,17 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       ...prev,
       unlockedLevels: prev.unlockedLevels.includes(levelId) 
         ? prev.unlockedLevels 
-        : [...prev.unlockedLevels, levelId]
+        : [...prev.unlockedLevels, levelId].sort((a,b) => a-b)
     }));
   };
 
   const unlockAllLevels = () => {
-    const all = Array.from({ length: 22 }, (_, i) => i + 1);
+    const all = Array.from({ length: 27 }, (_, i) => i + 1);
     setState(prev => ({ ...prev, unlockedLevels: all }));
   };
 
   const resetGame = () => {
-    if (confirm("Reset all your progress?")) {
+    if (confirm("Xóa hết tiến trình và chơi lại từ đầu?")) {
       setState(INITIAL_STATE);
       localStorage.removeItem(STORAGE_KEY);
       window.location.hash = "/";

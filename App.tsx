@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -31,6 +30,13 @@ import TrafficHero from './features/TrafficHero.tsx';
 import SizeExplorer from './features/SizeExplorer.tsx';
 import DinoFinale from './features/DinoFinale.tsx';
 
+// New Features
+import SoundStudio from './features/SoundStudio.tsx';
+import MemoryMatch from './features/MemoryMatch.tsx';
+import BodyMap from './features/BodyMap.tsx';
+import VerbRun from './features/VerbRun.tsx';
+import ColorLab from './features/ColorLab.tsx';
+
 const Navigation = () => {
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
@@ -55,41 +61,47 @@ const Navigation = () => {
     }
   };
 
-  // Chỉ hiển thị Navigation khi KHÔNG ở màn hình Home
   if (location.pathname === '/') return null;
 
   return (
-    <div className="fixed bottom-6 right-6 z-[1000] flex flex-col items-end gap-3 pointer-events-none">
+    <div className="fixed bottom-4 right-4 md:bottom-6 md:right-6 z-[1000] flex flex-col items-end gap-4 pointer-events-none">
       <AnimatePresence>
         {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.5, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.5, y: 20 }}
-            className="flex flex-col gap-3 mb-3 pointer-events-auto"
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.5, y: 20 }} 
+            animate={{ opacity: 1, scale: 1, y: 0 }} 
+            exit={{ opacity: 0, scale: 0.5, y: 20 }} 
+            className="flex flex-col gap-4 mb-2 pointer-events-auto"
           >
             <button 
-              onClick={handleSelectKey}
-              className={`w-14 h-14 rounded-full shadow-2xl border-4 flex items-center justify-center transition-all active:scale-90 ${hasKey ? 'bg-indigo-500 border-indigo-100 text-white' : 'bg-rose-500 border-rose-100 text-white animate-pulse'}`}
+              onClick={handleSelectKey} 
+              className={`w-16 h-16 md:w-14 md:h-14 rounded-full shadow-2xl border-4 flex items-center justify-center transition-all active:scale-90 ${hasKey ? 'bg-indigo-500 border-indigo-100 text-white' : 'bg-rose-500 border-rose-100 text-white animate-pulse'}`}
             >
-              <Key size={24} />
+              <Key size={28} />
             </button>
-            <Link to="/" onClick={() => setIsOpen(false)} className="w-14 h-14 bg-white rounded-full shadow-2xl border-4 border-sky-100 text-sky-500 flex items-center justify-center">
-              <HomeIcon size={24} />
+            <Link 
+              to="/" 
+              onClick={() => setIsOpen(false)} 
+              className="w-16 h-16 md:w-14 md:h-14 bg-white rounded-full shadow-2xl border-4 border-sky-100 text-sky-500 flex items-center justify-center active:scale-90"
+            >
+              <HomeIcon size={28} />
             </Link>
-            <Link to="/map" onClick={() => setIsOpen(false)} className="w-14 h-14 bg-white rounded-full shadow-2xl border-4 border-emerald-100 text-emerald-500 flex items-center justify-center">
-              <MapIcon size={24} />
+            <Link 
+              to="/map" 
+              onClick={() => setIsOpen(false)} 
+              className="w-16 h-16 md:w-14 md:h-14 bg-white rounded-full shadow-2xl border-4 border-emerald-100 text-emerald-500 flex items-center justify-center active:scale-90"
+            >
+              <MapIcon size={28} />
             </Link>
           </motion.div>
         )}
       </AnimatePresence>
-
-      <motion.button
-        whileTap={{ scale: 0.85 }}
-        onClick={() => setIsOpen(!isOpen)}
-        className={`w-16 h-16 rounded-full shadow-2xl flex items-center justify-center border-4 border-white transition-all pointer-events-auto ${isOpen ? 'bg-slate-800 text-white' : 'bg-game-orange text-white'}`}
+      <motion.button 
+        whileTap={{ scale: 0.85 }} 
+        onClick={() => setIsOpen(!isOpen)} 
+        className={`w-20 h-20 md:w-16 md:h-16 rounded-full shadow-2xl flex items-center justify-center border-4 border-white transition-all pointer-events-auto ${isOpen ? 'bg-slate-800 text-white' : 'bg-game-orange text-white'}`}
       >
-        {isOpen ? <X size={28} /> : <Menu size={28} />}
+        {isOpen ? <X size={32} /> : <Menu size={32} />}
       </motion.button>
     </div>
   );
@@ -127,6 +139,11 @@ const App: React.FC = () => {
                   <Route path="/game/traffic" element={<TrafficHero />} />
                   <Route path="/game/size" element={<SizeExplorer />} />
                   <Route path="/game/finale" element={<DinoFinale />} />
+                  <Route path="/game/music" element={<SoundStudio />} />
+                  <Route path="/game/memory" element={<MemoryMatch />} />
+                  <Route path="/game/body" element={<BodyMap />} />
+                  <Route path="/game/verbs" element={<VerbRun />} />
+                  <Route path="/game/colorlab" element={<ColorLab />} />
                 </Routes>
              </AnimatePresence>
              <Navigation />
