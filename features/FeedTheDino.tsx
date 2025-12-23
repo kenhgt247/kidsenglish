@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, useAnimation, AnimatePresence } from 'framer-motion';
-import { Volume2, ArrowRight, AlertCircle, Key } from 'lucide-react';
+import { Volume2, ArrowRight, AlertCircle } from 'lucide-react';
 import { Howl } from 'howler';
 import { GoogleGenAI, Modality } from '@google/genai';
 import { useGame } from '../GameContext.tsx';
@@ -9,10 +9,17 @@ import Confetti from '../components/Confetti.tsx';
 import { FoodItem, GameStatus } from '../types.ts';
 import { useNavigate } from 'react-router-dom';
 
-// Sử dụng link từ CDN khác hoặc các hiệu ứng mặc định nếu lỗi
-const chompSfx = new Howl({ src: ['https://actions.google.com/sounds/v1/cartoon/pop.ogg'], volume: 0.5 });
-const bonkSfx = new Howl({ src: ['https://actions.google.com/sounds/v1/cartoon/boing.ogg'], volume: 0.4 });
-const pickupSfx = new Howl({ src: ['https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg'], volume: 0.3 });
+// Tạo âm thanh với xử lý lỗi để không làm treo ứng dụng
+const createSfx = (src: string) => new Howl({ 
+  src: [src], 
+  volume: 0.5,
+  onloaderror: (id, err) => console.warn(`Sound load error: ${src}`, err),
+  onplayerror: (id, err) => console.warn(`Sound play error: ${src}`, err)
+});
+
+const chompSfx = createSfx('https://actions.google.com/sounds/v1/cartoon/pop.ogg');
+const bonkSfx = createSfx('https://actions.google.com/sounds/v1/cartoon/boing.ogg');
+const pickupSfx = createSfx('https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg');
 
 const FOOD_ITEMS: FoodItem[] = [
   { id: 'apple', label: 'APPLE', icon: '🍎', color: 'bg-red-400' },
@@ -23,26 +30,38 @@ const FOOD_ITEMS: FoodItem[] = [
 ];
 
 function decodeBase64(base64: string) {
-  const binaryString = atob(base64);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
-  return bytes;
+  try {
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+    return bytes;
+  } catch (e) {
+    console.error("Base64 decode error", e);
+    return new Uint8Array();
+  }
 }
 
-async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
-  const numSamples = Math.floor(data.byteLength / 2);
-  const frameCount = Math.floor(numSamples / numChannels);
-  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
-  const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
-  for (let channel = 0; channel < numChannels; channel++) {
-    const channelData = buffer.getChannelData(channel);
-    for (let i = 0; i < frameCount; i++) {
-      const sampleIndex = (i * numChannels + channel) * 2;
-      const sample = dataView.getInt16(sampleIndex, true);
-      channelData[i] = sample / 32768.0;
+async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer | null> {
+  try {
+    const numSamples = Math.floor(data.byteLength / 2);
+    const frameCount = Math.floor(numSamples / numChannels);
+    const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+    const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
+    for (let channel = 0; channel < numChannels; channel++) {
+      const channelData = buffer.getChannelData(channel);
+      for (let i = 0; i < frameCount; i++) {
+        const sampleIndex = (i * numChannels + channel) * 2;
+        if (sampleIndex + 1 < data.byteLength) {
+          const sample = dataView.getInt16(sampleIndex, true);
+          channelData[i] = sample / 32768.0;
+        }
+      }
     }
+    return buffer;
+  } catch (e) {
+    console.error("Audio decode error", e);
+    return null;
   }
-  return buffer;
 }
 
 const FeedTheDino: React.FC = () => {
@@ -87,11 +106,13 @@ const FeedTheDino: React.FC = () => {
         const ctx = initAudioContext();
         if (ctx.state === 'suspended') await ctx.resume();
         const buffer = await decodeAudioData(decodeBase64(audioPart.inlineData.data), ctx, 24000, 1);
-        const source = ctx.createBufferSource();
-        source.buffer = buffer;
-        source.connect(ctx.destination);
-        source.onended = () => setIsSpeaking(false);
-        source.start();
+        if (buffer) {
+          const source = ctx.createBufferSource();
+          source.buffer = buffer;
+          source.connect(ctx.destination);
+          source.onended = () => setIsSpeaking(false);
+          source.start();
+        } else { setIsSpeaking(false); }
       } else { setIsSpeaking(false); }
     } catch (e: any) {
       setIsSpeaking(false);
@@ -109,7 +130,8 @@ const FeedTheDino: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    setTimeout(() => speakInstruction(targetItem.label), 500);
+    const timer = setTimeout(() => speakInstruction(targetItem.label), 800);
+    return () => clearTimeout(timer);
   }, []);
 
   const handleDragEnd = async (event: any, info: any, item: FoodItem) => {
@@ -122,7 +144,7 @@ const FeedTheDino: React.FC = () => {
       setStatus(GameStatus.SUCCESS);
       addScore(10);
       setProgress(p => p + 1);
-      chompSfx.play();
+      try { chompSfx.play(); } catch(e){}
       await dinoControls.start({ scale: [1, 1.2, 1], transition: { duration: 0.3 } });
       if (progress + 1 >= 5) {
         setIsVictory(true);
@@ -132,7 +154,7 @@ const FeedTheDino: React.FC = () => {
         setTimeout(startRound, 1000);
       }
     } else if (isOver) {
-      bonkSfx.play();
+      try { bonkSfx.play(); } catch(e){}
       dinoControls.start({ x: [-10, 10, 0], transition: { duration: 0.2 } });
     }
   };
@@ -143,47 +165,52 @@ const FeedTheDino: React.FC = () => {
       
       <AnimatePresence>
         {quotaError && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-[500] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-6">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-[1100] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-6">
             <div className="bg-white p-8 rounded-[2rem] text-center max-w-xs shadow-2xl">
               <AlertCircle className="mx-auto text-rose-500 mb-4" size={48} />
-              <h2 className="text-xl font-black mb-2 uppercase">Out of Credits</h2>
-              <p className="text-slate-500 mb-6 text-sm">Please select a Paid API Key to continue the adventure!</p>
-              <button onClick={() => window.aistudio?.openSelectKey?.()} className="w-full bg-rose-500 text-white font-black py-4 rounded-xl">🔑 CHANGE KEY</button>
+              <h2 className="text-xl font-black mb-2 uppercase tracking-tight">API Quota Error</h2>
+              <p className="text-slate-500 mb-6 text-sm">Please select a Paid API Key from Google AI Studio to use the Voice feature.</p>
+              <button onClick={() => window.aistudio?.openSelectKey?.()} className="w-full bg-rose-500 text-white font-black py-4 rounded-xl shadow-lg active:scale-95">🔑 SELECT KEY</button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
       <div className="z-10">
-        <button onClick={() => speakInstruction(targetItem.label)} className="bg-white px-8 py-4 rounded-2xl shadow-xl flex items-center gap-3 border-4 border-emerald-400">
+        <button 
+          onClick={(e) => { e.stopPropagation(); speakInstruction(targetItem.label); }} 
+          className="bg-white px-8 py-4 rounded-2xl shadow-xl flex items-center gap-3 border-4 border-emerald-400 active:scale-95"
+        >
           <Volume2 className={isSpeaking ? "text-emerald-500 animate-pulse" : "text-slate-300"} size={32} />
-          <span className="text-3xl font-black">{targetItem.label}</span>
+          <span className="text-3xl font-black text-slate-800">{targetItem.label}</span>
         </button>
       </div>
 
-      <motion.div ref={dinoRef} animate={dinoControls} className="w-48 h-48 bg-emerald-400 rounded-full flex items-center justify-center shadow-2xl border-8 border-white text-9xl">
+      <motion.div ref={dinoRef} animate={dinoControls} className="w-48 h-48 md:w-64 md:h-64 bg-emerald-400 rounded-full flex items-center justify-center shadow-2xl border-8 border-white text-9xl">
         {status === GameStatus.SUCCESS ? '😋' : '🦖'}
       </motion.div>
 
-      <div className="flex flex-wrap justify-center gap-4 px-4">
+      <div className="flex flex-wrap justify-center gap-4 px-4 z-20">
         {FOOD_ITEMS.map(item => (
           <motion.div
             key={item.id} drag dragSnapToOrigin
-            onDragStart={() => pickupSfx.play()}
+            onDragStart={() => { try { pickupSfx.play(); } catch(e){} }}
             onDragEnd={(e, i) => handleDragEnd(e, i, item)}
-            className={`w-20 h-20 ${item.color} rounded-2xl shadow-lg flex items-center justify-center text-4xl cursor-grab active:cursor-grabbing border-4 border-white`}
+            className={`w-20 h-20 md:w-24 md:h-24 ${item.color} rounded-2xl shadow-lg flex items-center justify-center text-4xl cursor-grab active:cursor-grabbing border-4 border-white active:shadow-2xl`}
           >
-            {item.icon}
+            <span className="select-none pointer-events-none">{item.icon}</span>
           </motion.div>
         ))}
       </div>
 
       {isVictory && (
-        <div className="fixed inset-0 z-[600] bg-emerald-500 flex flex-col items-center justify-center text-white p-8 text-center">
-          <h2 className="text-5xl font-black mb-8 uppercase">Excellent!</h2>
-          <button onClick={() => navigate('/map')} className="bg-white text-emerald-500 px-12 py-6 rounded-3xl text-2xl font-black shadow-2xl flex items-center gap-3">
-            CONTINUE <ArrowRight size={32} />
-          </button>
+        <div className="fixed inset-0 z-[1200] bg-emerald-500 flex flex-col items-center justify-center text-white p-8 text-center">
+          <motion.div initial={{ scale: 0.8 }} animate={{ scale: 1 }} className="flex flex-col items-center gap-6">
+            <h2 className="text-5xl md:text-7xl font-black mb-4 uppercase tracking-tighter">Excellent!</h2>
+            <button onClick={() => navigate('/map')} className="bg-white text-emerald-500 px-12 py-6 rounded-3xl text-2xl font-black shadow-2xl flex items-center gap-3 active:scale-95 transition-all">
+              CONTINUE <ArrowRight size={32} />
+            </button>
+          </motion.div>
         </div>
       )}
     </div>

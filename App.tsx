@@ -2,8 +2,8 @@
 import React, { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Home as HomeIcon, Map as MapIcon, Menu, X, Key, AlertTriangle } from 'lucide-react';
-import { GameProvider, useGame } from './GameContext.tsx';
+import { Home as HomeIcon, Map as MapIcon, Menu, X, Key } from 'lucide-react';
+import { GameProvider } from './GameContext.tsx';
 
 // Features Import
 import Home from './features/Home.tsx';
@@ -36,13 +36,14 @@ const Navigation = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [hasKey, setHasKey] = useState(true);
 
+  const checkKey = async () => {
+    if (window.aistudio?.hasSelectedApiKey) {
+      const selected = await window.aistudio.hasSelectedApiKey();
+      setHasKey(selected);
+    }
+  };
+
   useEffect(() => {
-    const checkKey = async () => {
-      if (window.aistudio?.hasSelectedApiKey) {
-        const selected = await window.aistudio.hasSelectedApiKey();
-        setHasKey(selected);
-      }
-    };
     checkKey();
   }, [location.pathname]);
 
@@ -54,11 +55,11 @@ const Navigation = () => {
     }
   };
 
-  // Ẩn Navigation ở màn hình Home để không chặn nút Play
+  // Chỉ hiển thị Navigation khi KHÔNG ở màn hình Home
   if (location.pathname === '/') return null;
 
   return (
-    <div className="fixed bottom-6 right-6 z-[999] flex flex-col items-end gap-3 pointer-events-none">
+    <div className="fixed bottom-6 right-6 z-[1000] flex flex-col items-end gap-3 pointer-events-none">
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -69,14 +70,14 @@ const Navigation = () => {
           >
             <button 
               onClick={handleSelectKey}
-              className={`w-14 h-14 md:w-16 md:h-16 rounded-full shadow-2xl border-4 flex items-center justify-center transition-all active:scale-90 ${hasKey ? 'bg-indigo-500 border-indigo-100 text-white' : 'bg-rose-500 border-rose-100 text-white animate-pulse'}`}
+              className={`w-14 h-14 rounded-full shadow-2xl border-4 flex items-center justify-center transition-all active:scale-90 ${hasKey ? 'bg-indigo-500 border-indigo-100 text-white' : 'bg-rose-500 border-rose-100 text-white animate-pulse'}`}
             >
               <Key size={24} />
             </button>
-            <Link to="/" onClick={() => setIsOpen(false)} className="w-14 h-14 md:w-16 md:h-16 bg-white rounded-full shadow-2xl border-4 border-sky-100 text-sky-500 flex items-center justify-center hover:bg-sky-50 transition-all">
+            <Link to="/" onClick={() => setIsOpen(false)} className="w-14 h-14 bg-white rounded-full shadow-2xl border-4 border-sky-100 text-sky-500 flex items-center justify-center">
               <HomeIcon size={24} />
             </Link>
-            <Link to="/map" onClick={() => setIsOpen(false)} className="w-14 h-14 md:w-16 md:h-16 bg-white rounded-full shadow-2xl border-4 border-emerald-100 text-emerald-500 flex items-center justify-center hover:bg-emerald-50 transition-all">
+            <Link to="/map" onClick={() => setIsOpen(false)} className="w-14 h-14 bg-white rounded-full shadow-2xl border-4 border-emerald-100 text-emerald-500 flex items-center justify-center">
               <MapIcon size={24} />
             </Link>
           </motion.div>
@@ -86,7 +87,7 @@ const Navigation = () => {
       <motion.button
         whileTap={{ scale: 0.85 }}
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-16 h-16 md:w-20 md:h-20 rounded-full shadow-2xl flex items-center justify-center border-4 border-white transition-all pointer-events-auto ${isOpen ? 'bg-slate-800 text-white' : 'bg-game-orange text-white'}`}
+        className={`w-16 h-16 rounded-full shadow-2xl flex items-center justify-center border-4 border-white transition-all pointer-events-auto ${isOpen ? 'bg-slate-800 text-white' : 'bg-game-orange text-white'}`}
       >
         {isOpen ? <X size={28} /> : <Menu size={28} />}
       </motion.button>
