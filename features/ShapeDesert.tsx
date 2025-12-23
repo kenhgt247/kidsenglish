@@ -25,13 +25,16 @@ function decodeBase64(base64: string) {
 }
 
 async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
-  const dataInt16 = new Int16Array(data.buffer, data.byteOffset, Math.floor(data.byteLength / 2));
-  const frameCount = Math.floor(dataInt16.length / numChannels);
+  const numSamples = Math.floor(data.byteLength / 2);
+  const frameCount = Math.floor(numSamples / numChannels);
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+  const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
   for (let channel = 0; channel < numChannels; channel++) {
     const channelData = buffer.getChannelData(channel);
     for (let i = 0; i < frameCount; i++) {
-      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+      const sampleIndex = (i * numChannels + channel) * 2;
+      const sample = dataView.getInt16(sampleIndex, true);
+      channelData[i] = sample / 32768.0;
     }
   }
   return buffer;
@@ -48,25 +51,31 @@ const ShapeDesert: React.FC = () => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const GOAL = 5;
 
+  const initAudioContext = () => {
+    if (!audioContextRef.current) {
+      const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
+      audioContextRef.current = new AudioContextClass({ sampleRate: 24000 });
+    }
+    return audioContextRef.current;
+  };
+
   const speak = async (text: string) => {
-    if (isSpeaking) return;
+    if (isSpeaking || !process.env.API_KEY) return;
     try {
       setIsSpeaking(true);
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-2.5-flash-preview-tts',
         contents: [{ parts: [{ text: `Find the ${text} shape!` }] }],
         config: { 
           responseModalities: [Modality.AUDIO],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } }
         }
       });
-      const base64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      const audioPart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.data);
+      const base64 = audioPart?.inlineData?.data;
       if (base64) {
-         if (!audioContextRef.current) {
-           audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-         }
-         const ctx = audioContextRef.current;
+         const ctx = initAudioContext();
          if (ctx.state === 'suspended') await ctx.resume();
          const buffer = await decodeAudioData(decodeBase64(base64), ctx, 24000, 1);
          const source = ctx.createBufferSource();
@@ -88,6 +97,7 @@ const ShapeDesert: React.FC = () => {
   useEffect(() => { nextRound(); }, []);
 
   const handleMatch = (id: string) => {
+    initAudioContext().resume();
     if (id === target.id) {
       matchSfx.play();
       addScore(30);
@@ -101,11 +111,11 @@ const ShapeDesert: React.FC = () => {
   };
 
   return (
-    <div className="h-full bg-[#FEF3C7] overflow-hidden flex flex-col p-4 md:p-8 relative">
+    <div 
+      className="h-full bg-[#FEF3C7] overflow-hidden flex flex-col p-4 md:p-8 relative"
+      onClick={() => { if(progress === 0 && !isSpeaking) speak(target.label); }}
+    >
       <Confetti active={isVictory} />
-      <div className="absolute bottom-0 w-full h-1/4 bg-[#FCD34D] rounded-t-[10rem] opacity-30 pointer-events-none" />
-      
-      {/* Mini Progress - Discreet */}
       <div className="absolute top-4 left-4 z-10 bg-white/50 backdrop-blur-sm px-3 py-1 rounded-full text-[10px] font-black text-amber-700">
         {progress}/{GOAL}
       </div>
@@ -118,7 +128,7 @@ const ShapeDesert: React.FC = () => {
         >
           <div className="text-amber-300 opacity-40 uppercase font-black tracking-widest text-[10px] md:text-xs">Find this!</div>
           <div className="text-slate-800 scale-[1.5] md:scale-[2.5]">{target.icon}</div>
-          <button onClick={() => speak(target.label)} className="mt-2 md:mt-4 p-3 bg-amber-100 rounded-full text-amber-600 active:scale-110">
+          <button onClick={(e) => { e.stopPropagation(); speak(target.label); }} className="mt-2 md:mt-4 p-3 bg-amber-100 rounded-full text-amber-600 active:scale-110">
              <Volume2 size={24} className={isSpeaking ? 'animate-pulse' : ''} />
           </button>
         </motion.div>

@@ -10,6 +10,30 @@ import { Howl } from 'howler';
 
 const popSfx = new Howl({ src: ['https://assets.mixkit.co/active_storage/sfx/2040/2040-preview.mp3'], volume: 0.6 });
 
+function decodeBase64(base64: string) {
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+  return bytes;
+}
+
+async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
+  const numSamples = Math.floor(data.byteLength / 2);
+  const frameCount = Math.floor(numSamples / numChannels);
+  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+  const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
+
+  for (let channel = 0; channel < numChannels; channel++) {
+    const channelData = buffer.getChannelData(channel);
+    for (let i = 0; i < frameCount; i++) {
+      const sampleIndex = (i * numChannels + channel) * 2;
+      const sample = dataView.getInt16(sampleIndex, true);
+      channelData[i] = sample / 32768.0;
+    }
+  }
+  return buffer;
+}
+
 const MagicMath: React.FC = () => {
   const navigate = useNavigate();
   const { addScore, unlockLevel } = useGame();
@@ -22,30 +46,35 @@ const MagicMath: React.FC = () => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const GOAL = 5;
 
+  const initAudioContext = () => {
+    if (!audioContextRef.current) {
+      const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
+      audioContextRef.current = new AudioContextClass({ sampleRate: 24000 });
+    }
+    return audioContextRef.current;
+  };
+
   const speak = async (n1: number, n2: number) => {
-    if (isSpeaking) return;
+    if (isSpeaking || !process.env.API_KEY) return;
     try {
       setIsSpeaking(true);
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-2.5-flash-preview-tts',
         contents: [{ parts: [{ text: `What is ${n1} plus ${n2}?` }] }],
         config: { 
           responseModalities: [Modality.AUDIO],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Charon' } } }
         }
       });
-      const base64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      
+      const audioPart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.data);
+      const base64 = audioPart?.inlineData?.data;
+      
       if (base64) {
-         const ctx = audioContextRef.current || new AudioContext({ sampleRate: 24000 });
-         audioContextRef.current = ctx;
-         const binary = atob(base64);
-         const bytes = new Uint8Array(binary.length);
-         for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-         const dataInt16 = new Int16Array(bytes.buffer);
-         const buffer = ctx.createBuffer(1, dataInt16.length, 24000);
-         const channelData = buffer.getChannelData(0);
-         for (let i = 0; i < dataInt16.length; i++) channelData[i] = dataInt16[i] / 32768.0;
+         const ctx = initAudioContext();
+         if (ctx.state === 'suspended') await ctx.resume();
+         const buffer = await decodeAudioData(decodeBase64(base64), ctx, 24000, 1);
          const source = ctx.createBufferSource();
          source.buffer = buffer;
          source.connect(ctx.destination);
@@ -71,6 +100,7 @@ const MagicMath: React.FC = () => {
   useEffect(() => { nextRound(); }, []);
 
   const handleSelect = (val: number) => {
+    initAudioContext().resume();
     if (val === num1 + num2) {
       popSfx.play();
       addScore(50);
@@ -82,7 +112,10 @@ const MagicMath: React.FC = () => {
   };
 
   return (
-    <div className="h-full bg-[#0F172A] flex flex-col items-center justify-center p-8 relative overflow-hidden">
+    <div 
+      className="h-full bg-[#0F172A] flex flex-col items-center justify-center p-8 relative overflow-hidden"
+      onClick={() => { if(progress === 0 && !isSpeaking) speak(num1, num2); }}
+    >
       <Confetti active={isVictory} />
       <div className="absolute top-4 left-4 z-10 bg-white/10 px-4 py-1 rounded-full text-indigo-300 font-black">MATH: {progress}/{GOAL}</div>
 

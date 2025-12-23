@@ -93,7 +93,6 @@ const Map: React.FC = () => {
     setTimeout(() => setIsDinoJumping(false), 500);
   };
 
-  // Generate Path Segments
   const renderPath = () => {
     const segments = [];
     for (let i = 0; i < levels.length - 1; i++) {
@@ -129,61 +128,59 @@ const Map: React.FC = () => {
       className="h-full bg-[#fdfbf7] overflow-x-auto overflow-y-hidden no-scrollbar touch-pan-x"
     >
       <div className="relative min-w-[4200px] h-full p-8 md:p-12">
-        {/* Background Decorations */}
         <Decoration emoji="🌴" x={5} y={65} delay={0.1} />
-        <Decoration emoji="🦖" x={30} y={30} delay={0.5} size="text-8xl opacity-5" />
         <Decoration emoji="🚀" x={140} y={55} delay={1.6} />
         <Decoration emoji="🌈" x={185} y={60} delay={2.2} size="text-7xl" />
-        <Decoration emoji="🌋" x={45} y={20} delay={0.8} size="text-9xl opacity-10" />
 
         {/* Header Overlay */}
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] w-[92%] max-w-2xl flex gap-3 items-center bg-white/90 backdrop-blur-xl p-3 rounded-[2rem] border-2 border-slate-100 shadow-2xl">
-          <div className="p-2 bg-emerald-500 rounded-2xl text-white shadow-lg shadow-emerald-200">
-            <MapPin size={24} />
-          </div>
-          <div className="flex-1 flex flex-col gap-1">
-             <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
-                <span>World Explorer</span>
-                <span>{unlocked.length} / {levels.length}</span>
-             </div>
-             <div className="h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-50">
-                <motion.div 
-                  initial={{ width: 0 }}
-                  animate={{ width: `${progressPercent}%` }} 
-                  className="h-full bg-gradient-to-r from-emerald-400 to-emerald-600 shadow-inner" 
-                />
-             </div>
-          </div>
-          <div className="flex items-center gap-2 bg-yellow-400 text-white px-4 py-2 rounded-2xl font-black text-lg shadow-lg shadow-yellow-100">
-             <Trophy size={20} fill="currentColor" />
-             <span>{state.score}</span>
-          </div>
-          <div className="flex gap-2 ml-1">
-            <motion.button 
-              whileTap={{ scale: 0.9 }}
-              onClick={() => { if(confirm("Unlock all 22 levels for testing?")) unlockAllLevels(); }}
-              className="p-3 bg-indigo-50 rounded-2xl text-indigo-400 hover:bg-indigo-500 hover:text-white transition-all shadow-sm"
-              title="Unlock All"
-            >
-              <Sparkles size={20} />
-            </motion.button>
-            <motion.button 
-              whileTap={{ scale: 0.9 }}
-              onClick={resetGame}
-              className="p-3 bg-rose-50 rounded-2xl text-rose-400 hover:bg-rose-500 hover:text-white transition-all shadow-sm"
-              title="Reset Progress"
-            >
-              <RotateCcw size={20} />
-            </motion.button>
+        <div className="fixed top-0 left-0 right-0 z-[150] p-4 pointer-events-none">
+          <div className="max-w-4xl mx-auto flex gap-3 items-center bg-white/95 backdrop-blur-xl p-2 rounded-2xl border-2 border-slate-100 shadow-2xl safe-area-top pointer-events-auto">
+            <div className="p-2 bg-emerald-500 rounded-xl text-white shadow-lg shrink-0">
+              <MapPin size={18} />
+            </div>
+            
+            <div className="flex-1 flex flex-col gap-1 min-w-0">
+               <div className="flex justify-between text-[8px] font-black text-slate-400 uppercase tracking-widest px-1">
+                  <span className="truncate">Adventure Progress</span>
+                  <span className="shrink-0">{unlocked.length}/{levels.length}</span>
+               </div>
+               <div className="h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-50">
+                  <motion.div 
+                    initial={{ width: 0 }}
+                    animate={{ width: `${progressPercent}%` }} 
+                    className="h-full bg-gradient-to-r from-emerald-400 to-emerald-600 shadow-inner" 
+                  />
+               </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 bg-yellow-400 text-white px-3 py-1.5 rounded-xl font-black text-sm shadow-md shrink-0">
+               <Trophy size={14} fill="currentColor" />
+               <span>{state.score}</span>
+            </div>
+
+            <div className="hidden md:flex gap-1.5">
+              <motion.button 
+                whileTap={{ scale: 0.9 }}
+                onClick={() => { if(confirm("Unlock all 22 levels?")) unlockAllLevels(); }}
+                className="p-2.5 bg-indigo-50 rounded-xl text-indigo-400 hover:bg-indigo-500 hover:text-white transition-all shadow-sm"
+              >
+                <Sparkles size={16} />
+              </motion.button>
+              <motion.button 
+                whileTap={{ scale: 0.9 }}
+                onClick={resetGame}
+                className="p-2.5 bg-rose-50 rounded-xl text-rose-400 hover:bg-rose-500 hover:text-white transition-all shadow-sm"
+              >
+                <RotateCcw size={16} />
+              </motion.button>
+            </div>
           </div>
         </div>
 
-        {/* Path SVG */}
         <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-40" viewBox="0 0 4200 100" preserveAspectRatio="none">
           {renderPath()}
         </svg>
 
-        {/* Mascot Dino */}
         <motion.div
           onClick={handleDinoClick}
           animate={{ 
@@ -193,11 +190,7 @@ const Map: React.FC = () => {
             scale: isDinoJumping ? 1.4 : 1.2,
             rotate: isDinoJumping ? [0, 10, -10, 0] : 0
           }}
-          transition={{ 
-            type: "spring", 
-            stiffness: 120, 
-            damping: 12 
-          }}
+          transition={{ type: "spring", stiffness: 120, damping: 12 }}
           className="absolute -translate-x-1/2 z-[60] cursor-pointer"
         >
           <motion.div 
@@ -205,7 +198,7 @@ const Map: React.FC = () => {
             transition={{ repeat: Infinity, duration: 2 }} 
             className="absolute bottom-6 left-1/2 -translate-x-1/2 w-24 h-8 bg-black/20 blur-2xl rounded-full" 
           />
-          <div className="text-7xl md:text-[9rem] drop-shadow-[0_20px_20px_rgba(0,0,0,0.2)]">🦖</div>
+          <div className="text-7xl md:text-[9rem] drop-shadow-2xl">🦖</div>
         </motion.div>
 
         {levels.map((level) => {
@@ -220,78 +213,50 @@ const Map: React.FC = () => {
               className="absolute -translate-x-1/2 -translate-y-1/2 z-10"
             >
               <div className="relative flex flex-col items-center group">
-                {/* Visual Feedback for Current Target */}
                 <AnimatePresence>
                   {isCurrentTarget && !isCompleted && level.id < 22 && (
                     <motion.div 
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="absolute -top-24 bg-white px-6 py-2 rounded-2xl shadow-2xl border-2 border-emerald-500 text-emerald-600 font-black text-sm uppercase z-20 whitespace-nowrap"
+                      className="absolute -top-20 bg-white px-4 py-1.5 rounded-xl shadow-2xl border-2 border-emerald-500 text-emerald-600 font-black text-[10px] uppercase z-20 whitespace-nowrap"
                     >
-                      <motion.div 
-                        animate={{ scale: [1, 1.1, 1] }} 
-                        transition={{ repeat: Infinity }}
-                        className="flex items-center gap-2"
-                      >
-                        Play Now! {level.icon}
+                      <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ repeat: Infinity }}>
+                        PLAY! {level.icon}
                       </motion.div>
-                      <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-white border-b-2 border-r-2 border-emerald-500 rotate-45" />
+                      <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-white border-b-2 border-r-2 border-emerald-500 rotate-45" />
                     </motion.div>
                   )}
                 </AnimatePresence>
 
-                {/* Level Node Button */}
                 <motion.button
                   onClick={() => isUnlocked && navigate(level.route)}
                   whileHover={isUnlocked ? { scale: 1.1, y: -5 } : {}}
                   whileTap={isUnlocked ? { scale: 0.95 } : {}}
                   className={`
-                    w-20 h-20 md:w-32 md:h-32 rounded-3xl md:rounded-[3.5rem] shadow-2xl flex items-center justify-center border-4 border-white transition-all overflow-hidden relative
+                    w-20 h-20 md:w-32 md:h-32 rounded-[2rem] md:rounded-[3.5rem] shadow-2xl flex items-center justify-center border-4 border-white transition-all overflow-hidden relative
                     ${isUnlocked ? `${getThemeColor(level.theme)} text-white` : 'bg-slate-200 text-slate-400 grayscale'}
-                    ${isCurrentTarget && !isCompleted ? 'ring-8 ring-emerald-500/20 ring-offset-4 ring-offset-transparent' : ''}
-                    ${isCompleted ? 'opacity-90' : 'opacity-100'}
+                    ${isCurrentTarget && !isCompleted ? 'ring-8 ring-emerald-500/20' : ''}
                   `}
                 >
-                  {/* Status Overlays */}
                   {!isUnlocked ? (
                     <Lock size={28} className="opacity-50" />
                   ) : (
                     <div className="flex flex-col items-center">
                       <span className="text-3xl md:text-6xl font-black leading-none">{level.id}</span>
                       <span className="text-lg md:text-3xl mt-1 drop-shadow-md">{level.icon}</span>
-                      
                       {isCompleted && (
-                        <div className="absolute top-2 right-2 text-white drop-shadow-lg">
-                          <CheckCircle2 size={20} fill="rgba(255,255,255,0.3)" />
+                        <div className="absolute top-2 right-2 text-white">
+                          <CheckCircle2 size={16} fill="rgba(255,255,255,0.3)" />
                         </div>
                       )}
                     </div>
                   )}
-                  
-                  {/* Subtle Texture Overlay */}
-                  <div className="absolute inset-0 bg-white/5 pointer-events-none" />
                 </motion.button>
 
-                {/* Level Title Label */}
-                <div className={`
-                  mt-6 flex flex-col items-center transition-all duration-300
-                  ${isUnlocked ? 'opacity-100 translate-y-0' : 'opacity-40 translate-y-2'}
-                `}>
-                  <h3 className={`
-                    font-black text-xs md:text-sm uppercase px-4 py-1.5 rounded-full shadow-sm border border-slate-100
-                    ${isUnlocked ? 'text-slate-800 bg-white' : 'text-slate-400 bg-slate-50'}
-                    ${isCurrentTarget ? 'ring-2 ring-emerald-500/30' : ''}
-                  `}>
+                <div className={`mt-4 flex flex-col items-center transition-all ${isUnlocked ? 'opacity-100' : 'opacity-40'}`}>
+                  <h3 className="font-black text-[8px] md:text-xs uppercase px-3 py-1 rounded-full bg-white shadow-sm border border-slate-100">
                     {level.title}
                   </h3>
-                  
-                  {isUnlocked && (
-                    <div className="flex gap-0.5 mt-1.5">
-                       <Star size={10} className="text-yellow-400 fill-yellow-400" />
-                       <Star size={10} className="text-yellow-400 fill-yellow-400" />
-                       <Star size={10} className="text-yellow-400 fill-yellow-400" />
-                    </div>
-                  )}
                 </div>
               </div>
             </motion.div>
@@ -299,34 +264,22 @@ const Map: React.FC = () => {
         })}
       </div>
       
-      {/* Scroll Hint */}
       <AnimatePresence>
         {maxUnlockedId < 5 && (
           <motion.div 
-            initial={{ opacity: 0, x: 20 }}
+            initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0 }}
-            className="fixed bottom-10 right-10 bg-white/80 backdrop-blur-md px-6 py-3 rounded-full shadow-xl border border-slate-100 flex items-center gap-3 text-slate-500 font-black z-[110]"
+            className="fixed bottom-10 left-10 bg-white/90 backdrop-blur-md px-5 py-2.5 rounded-full shadow-2xl border border-slate-100 flex items-center gap-2 text-[10px] text-slate-500 font-black z-[110]"
           >
-            Scroll to explore <ChevronRight size={20} className="animate-bounce-x" />
+            <ChevronRight size={14} className="rotate-180" /> SCROLL TO EXPLORE
           </motion.div>
         )}
       </AnimatePresence>
 
       <style>{`
-        @keyframes bounce-x {
-          0%, 100% { transform: translateX(0); }
-          50% { transform: translateX(10px); }
-        }
-        .animate-bounce-x {
-          animation: bounce-x 1s infinite ease-in-out;
-        }
-        .animate-spin-slow {
-          animation: spin 8s linear infinite;
-        }
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
+        .safe-area-top {
+          padding-top: env(safe-area-inset-top, 8px);
         }
       `}</style>
     </div>

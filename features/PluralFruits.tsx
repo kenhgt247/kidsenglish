@@ -24,13 +24,17 @@ function decodeBase64(base64: string) {
 }
 
 async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
-  const dataInt16 = new Int16Array(data.buffer, data.byteOffset, Math.floor(data.byteLength / 2));
-  const frameCount = Math.floor(dataInt16.length / numChannels);
+  const numSamples = Math.floor(data.byteLength / 2);
+  const frameCount = Math.floor(numSamples / numChannels);
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+  const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
+
   for (let channel = 0; channel < numChannels; channel++) {
     const channelData = buffer.getChannelData(channel);
     for (let i = 0; i < frameCount; i++) {
-      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+      const sampleIndex = (i * numChannels + channel) * 2;
+      const sample = dataView.getInt16(sampleIndex, true);
+      channelData[i] = sample / 32768.0;
     }
   }
   return buffer;
@@ -47,21 +51,34 @@ const PluralFruits: React.FC = () => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const GOAL = 5;
 
+  const initAudioContext = () => {
+    if (!audioContextRef.current) {
+      const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
+      audioContextRef.current = new AudioContextClass({ sampleRate: 24000 });
+    }
+    return audioContextRef.current;
+  };
+
   const speak = async (count: number, label: string) => {
-    if (isSpeaking) return;
+    if (isSpeaking || !process.env.API_KEY) return;
     const txt = count === 1 ? `Find one ${label}!` : `Find two ${label}s!`;
     try {
       setIsSpeaking(true);
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-2.5-flash-preview-tts',
         contents: [{ parts: [{ text: txt }] }],
-        config: { responseModalities: [Modality.AUDIO] }
+        config: { 
+          responseModalities: [Modality.AUDIO],
+          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } }
+        }
       });
-      const base64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      
+      const audioPart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.data);
+      const base64 = audioPart?.inlineData?.data;
+      
       if (base64) {
-         if (!audioContextRef.current) audioContextRef.current = new AudioContext({ sampleRate: 24000 });
-         const ctx = audioContextRef.current;
+         const ctx = initAudioContext();
          if (ctx.state === 'suspended') await ctx.resume();
          const buffer = await decodeAudioData(decodeBase64(base64), ctx, 24000, 1);
          const source = ctx.createBufferSource();
@@ -84,6 +101,7 @@ const PluralFruits: React.FC = () => {
   useEffect(() => { nextRound(); }, []);
 
   const handleChoice = (count: number) => {
+    initAudioContext().resume();
     if (count === targetCount) {
       correctSfx.play();
       addScore(70);
@@ -91,7 +109,7 @@ const PluralFruits: React.FC = () => {
       setProgress(n);
       if (n >= GOAL) {
         setIsVictory(true);
-        unlockLevel(18); // Unlock Pet Parlor
+        unlockLevel(18);
       } else {
         nextRound();
       }
@@ -99,7 +117,10 @@ const PluralFruits: React.FC = () => {
   };
 
   return (
-    <div className="h-full bg-orange-50 flex flex-col items-center justify-center p-8 relative">
+    <div 
+      className="h-full bg-orange-50 flex flex-col items-center justify-center p-8 relative"
+      onClick={() => { if(progress === 0 && !isSpeaking) speak(targetCount, currentFruit.label.toLowerCase()); }}
+    >
       <Confetti active={isVictory} />
       <div className="absolute top-4 left-4 z-10 bg-white/50 px-4 py-1.5 rounded-full text-xs font-black text-orange-700">
         🍎 PLURALS: {progress}/{GOAL}

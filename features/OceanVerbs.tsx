@@ -27,13 +27,16 @@ function decodeBase64(base64: string) {
 }
 
 async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
-  const dataInt16 = new Int16Array(data.buffer, data.byteOffset, Math.floor(data.byteLength / 2));
-  const frameCount = Math.floor(dataInt16.length / numChannels);
+  const numSamples = Math.floor(data.byteLength / 2);
+  const frameCount = Math.floor(numSamples / numChannels);
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+  const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
   for (let channel = 0; channel < numChannels; channel++) {
     const channelData = buffer.getChannelData(channel);
     for (let i = 0; i < frameCount; i++) {
-      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+      const sampleIndex = (i * numChannels + channel) * 2;
+      const sample = dataView.getInt16(sampleIndex, true);
+      channelData[i] = sample / 32768.0;
     }
   }
   return buffer;
@@ -50,23 +53,31 @@ const OceanVerbs: React.FC = () => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const GOAL = 5;
 
+  const initAudioContext = () => {
+    if (!audioContextRef.current) {
+      const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
+      audioContextRef.current = new AudioContextClass({ sampleRate: 24000 });
+    }
+    return audioContextRef.current;
+  };
+
   const speak = async (verb: string) => {
-    if (isSpeaking) return;
+    if (isSpeaking || !process.env.API_KEY) return;
     try {
       setIsSpeaking(true);
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-2.5-flash-preview-tts',
         contents: [{ parts: [{ text: `Can you find who is ${verb}ing?` }] }],
         config: { 
           responseModalities: [Modality.AUDIO],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } }
         }
       });
-      const base64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      const audioPart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.data);
+      const base64 = audioPart?.inlineData?.data;
       if (base64) {
-         if (!audioContextRef.current) audioContextRef.current = new AudioContext({ sampleRate: 24000 });
-         const ctx = audioContextRef.current;
+         const ctx = initAudioContext();
          if (ctx.state === 'suspended') await ctx.resume();
          const buffer = await decodeAudioData(decodeBase64(base64), ctx, 24000, 1);
          const source = ctx.createBufferSource();
@@ -88,6 +99,7 @@ const OceanVerbs: React.FC = () => {
   useEffect(() => { nextRound(); }, []);
 
   const handleChoice = (id: string) => {
+    initAudioContext().resume();
     if (id === target.id) {
       correctSfx.play();
       addScore(40);
@@ -105,10 +117,12 @@ const OceanVerbs: React.FC = () => {
   };
 
   return (
-    <div className="h-full bg-gradient-to-b from-sky-400 to-blue-700 overflow-hidden flex flex-col p-4 md:p-8 relative">
+    <div 
+      className="h-full bg-gradient-to-b from-sky-400 to-blue-700 overflow-hidden flex flex-col p-4 md:p-8 relative"
+      onClick={() => { if(progress === 0 && !isSpeaking) speak(target.label.toLowerCase()); }}
+    >
       <Confetti active={isVictory} />
       
-      {/* Mini Progress - Top Left */}
       <div className="absolute top-4 left-4 z-10">
         <div className="bg-white/20 backdrop-blur-md px-4 py-1.5 rounded-full text-xs font-black text-white border border-white/30">
           🌊 {progress}/{GOAL}
@@ -129,7 +143,7 @@ const OceanVerbs: React.FC = () => {
           </motion.div>
           
           <button 
-            onClick={() => speak(target.label.toLowerCase())}
+            onClick={(e) => { e.stopPropagation(); speak(target.label.toLowerCase()); }}
             className="flex items-center gap-3 bg-white/10 backdrop-blur-md border-2 border-white/30 px-8 py-4 rounded-3xl active:scale-110 transition-transform"
           >
             <Volume2 className={isSpeaking ? 'text-white animate-pulse' : 'text-sky-200'} size={28} />
@@ -154,19 +168,6 @@ const OceanVerbs: React.FC = () => {
           ))}
         </div>
       </div>
-
-      {/* Decorative Bubbles */}
-      {[...Array(6)].map((_, i) => (
-        <motion.div
-          key={i}
-          animate={{ y: [-20, -1000], x: Math.sin(i) * 50 }}
-          transition={{ duration: 10 + i * 2, repeat: Infinity, ease: "linear" }}
-          className="absolute bottom-0 text-4xl opacity-20 pointer-events-none"
-          style={{ left: `${15 * i}%` }}
-        >
-          🫧
-        </motion.div>
-      ))}
 
       {isVictory && (
         <div className="fixed inset-0 bg-blue-950/90 backdrop-blur-2xl z-[150] flex items-center justify-center p-6">

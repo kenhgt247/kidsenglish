@@ -28,13 +28,16 @@ function decodeBase64(base64: string) {
 }
 
 async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
-  const dataInt16 = new Int16Array(data.buffer, data.byteOffset, Math.floor(data.byteLength / 2));
-  const frameCount = Math.floor(dataInt16.length / numChannels);
+  const numSamples = Math.floor(data.byteLength / 2);
+  const frameCount = Math.floor(numSamples / numChannels);
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+  const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
   for (let channel = 0; channel < numChannels; channel++) {
     const channelData = buffer.getChannelData(channel);
     for (let i = 0; i < frameCount; i++) {
-      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+      const sampleIndex = (i * numChannels + channel) * 2;
+      const sample = dataView.getInt16(sampleIndex, true);
+      channelData[i] = sample / 32768.0;
     }
   }
   return buffer;
@@ -50,23 +53,31 @@ const RainbowColors: React.FC = () => {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const audioContextRef = useRef<AudioContext | null>(null);
 
+  const initAudioContext = () => {
+    if (!audioContextRef.current) {
+      const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
+      audioContextRef.current = new AudioContextClass({ sampleRate: 24000 });
+    }
+    return audioContextRef.current;
+  };
+
   const speak = async (colorName: string) => {
-    if (isSpeaking) return;
+    if (isSpeaking || !process.env.API_KEY) return;
     try {
       setIsSpeaking(true);
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-2.5-flash-preview-tts',
         contents: [{ parts: [{ text: `Find the ${colorName} bubble to build our rainbow!` }] }],
         config: { 
           responseModalities: [Modality.AUDIO],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } }
         }
       });
-      const base64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      const audioPart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.data);
+      const base64 = audioPart?.inlineData?.data;
       if (base64) {
-         if (!audioContextRef.current) audioContextRef.current = new AudioContext({ sampleRate: 24000 });
-         const ctx = audioContextRef.current;
+         const ctx = initAudioContext();
          if (ctx.state === 'suspended') await ctx.resume();
          const buffer = await decodeAudioData(decodeBase64(base64), ctx, 24000, 1);
          const source = ctx.createBufferSource();
@@ -96,6 +107,7 @@ const RainbowColors: React.FC = () => {
   }, [target]);
 
   const handlePop = (bubble: any) => {
+    initAudioContext().resume();
     if (bubble.color.id === target.id) {
       popSfx.play();
       magicSfx.play();
@@ -125,7 +137,6 @@ const RainbowColors: React.FC = () => {
         <CloudRain size={48} className="text-white animate-bounce" />
       </div>
 
-      {/* Rainbow Preview */}
       <div className="flex-1 flex flex-col items-center justify-center relative z-10">
         <div className="relative w-[300px] h-[150px] md:w-[600px] md:h-[300px] overflow-hidden">
           {COLORS.map((c, i) => {
@@ -150,8 +161,8 @@ const RainbowColors: React.FC = () => {
 
         <motion.button 
           key={target.id}
-          onClick={() => speak(target.name)}
-          className="mt-12 bg-white px-12 py-6 rounded-full shadow-2xl flex items-center gap-4 border-4 border-sky-100 active:scale-95"
+          onClick={(e) => { e.stopPropagation(); speak(target.name); }}
+          className="mt-12 bg-white px-12 py-6 rounded-full shadow-2xl flex items-center gap-4 border-4 border-sky-100 active:scale-95 transition-all"
         >
           <Volume2 className={isSpeaking ? 'text-sky-500 animate-pulse' : 'text-slate-300'} size={36} />
           <span className="text-2xl md:text-5xl font-black uppercase tracking-tight" style={{ color: target.hex }}>
@@ -160,7 +171,6 @@ const RainbowColors: React.FC = () => {
         </motion.button>
       </div>
 
-      {/* Floating Bubbles */}
       <AnimatePresence>
         {bubbles.map(b => (
           <motion.button

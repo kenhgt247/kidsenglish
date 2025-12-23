@@ -31,13 +31,16 @@ function decodeBase64(base64: string) {
 }
 
 async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
-  const dataInt16 = new Int16Array(data.buffer, data.byteOffset, Math.floor(data.byteLength / 2));
-  const frameCount = Math.floor(dataInt16.length / numChannels);
+  const numSamples = Math.floor(data.byteLength / 2);
+  const frameCount = Math.floor(numSamples / numChannels);
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+  const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
   for (let channel = 0; channel < numChannels; channel++) {
     const channelData = buffer.getChannelData(channel);
     for (let i = 0; i < frameCount; i++) {
-      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+      const sampleIndex = (i * numChannels + channel) * 2;
+      const sample = dataView.getInt16(sampleIndex, true);
+      channelData[i] = sample / 32768.0;
     }
   }
   return buffer;
@@ -54,25 +57,31 @@ const ArcticOpposites: React.FC = () => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const GOAL = 6;
 
+  const initAudioContext = () => {
+    if (!audioContextRef.current) {
+      const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
+      audioContextRef.current = new AudioContextClass({ sampleRate: 24000 });
+    }
+    return audioContextRef.current;
+  };
+
   const speak = async (text: string) => {
-    if (isSpeaking) return;
+    if (isSpeaking || !process.env.API_KEY) return;
     try {
       setIsSpeaking(true);
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-2.5-flash-preview-tts',
         contents: [{ parts: [{ text: `What is the ${text}? Is it hot or cold?` }] }],
         config: { 
           responseModalities: [Modality.AUDIO],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } } }
         }
       });
-      const base64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      const audioPart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.data);
+      const base64 = audioPart?.inlineData?.data;
       if (base64) {
-         if (!audioContextRef.current) {
-           audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-         }
-         const ctx = audioContextRef.current;
+         const ctx = initAudioContext();
          if (ctx.state === 'suspended') await ctx.resume();
          const buffer = await decodeAudioData(decodeBase64(base64), ctx, 24000, 1);
          const source = ctx.createBufferSource();
@@ -97,7 +106,8 @@ const ArcticOpposites: React.FC = () => {
   }, []);
 
   const handleSelect = (type: string) => {
-    if (feedback !== null) return; // Prevent multiple clicks during animation
+    initAudioContext().resume();
+    if (feedback !== null) return;
 
     if (type === currentItem.type) {
       correctSfx.play();
@@ -123,24 +133,19 @@ const ArcticOpposites: React.FC = () => {
   };
 
   return (
-    <div className="h-full bg-blue-50 overflow-hidden flex flex-col p-4 md:p-8 relative">
+    <div 
+      className="h-full bg-blue-50 overflow-hidden flex flex-col p-4 md:p-8 relative"
+      onClick={() => { if(progress === 0 && !isSpeaking) speak(currentItem.label); }}
+    >
       <Confetti active={isVictory} />
       
-      {/* Mini Progress - Top Left to avoid Menu overlap */}
       <div className="absolute top-4 left-4 z-10 flex flex-col gap-1">
         <div className="bg-blue-600/20 backdrop-blur-sm px-4 py-1.5 rounded-full text-xs font-black text-blue-700 uppercase tracking-tight">
-          Level 8: {progress}/{GOAL}
-        </div>
-        <div className="h-1.5 w-32 bg-white/50 rounded-full overflow-hidden">
-          <motion.div 
-            animate={{ width: `${(progress / GOAL) * 100}%` }}
-            className="h-full bg-blue-500"
-          />
+          {progress}/{GOAL}
         </div>
       </div>
 
       <div className="flex-1 flex flex-col md:flex-row items-center justify-center gap-8 md:gap-16 z-10">
-        {/* Main Item Card */}
         <motion.div 
           key={currentItem.id}
           animate={
@@ -159,36 +164,18 @@ const ArcticOpposites: React.FC = () => {
           <div className="text-xl md:text-3xl font-black text-blue-900 uppercase tracking-[0.2em]">{currentItem.label}</div>
           
           <button 
-            onClick={() => speak(currentItem.label)} 
+            onClick={(e) => { e.stopPropagation(); speak(currentItem.label); }} 
             className="absolute -bottom-4 -right-4 bg-blue-500 p-4 rounded-full text-white shadow-xl hover:bg-blue-600 active:scale-125 transition-all"
           >
             <Volume2 size={24} className={isSpeaking ? 'animate-pulse' : ''} />
           </button>
-
-          {/* Visual Overlay Feedback */}
-          <AnimatePresence>
-            {feedback === 'correct' && (
-              <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} className="absolute -top-6 -left-6 bg-green-500 text-white p-3 rounded-full shadow-lg">
-                <CheckCircle2 size={32} />
-              </motion.div>
-            )}
-            {feedback === 'incorrect' && (
-              <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} className="absolute -top-6 -left-6 bg-red-500 text-white p-3 rounded-full shadow-lg">
-                <XCircle size={32} />
-              </motion.div>
-            )}
-          </AnimatePresence>
         </motion.div>
 
-        {/* Action Buttons */}
         <div className="flex flex-col gap-4 w-full max-w-xs md:max-w-sm">
           <motion.button
             whileTap={{ scale: 0.9 }}
             onClick={() => handleSelect('cold')}
-            className={`
-              h-24 md:h-32 rounded-3xl md:rounded-[2.5rem] shadow-xl border-4 border-white flex items-center justify-center gap-4 transition-all
-              ${feedback === 'correct' && currentItem.type === 'cold' ? 'bg-green-500 ring-4 ring-green-200' : 'bg-cyan-500 hover:bg-cyan-600'}
-            `}
+            className="h-24 md:h-32 rounded-3xl bg-cyan-500 hover:bg-cyan-600 shadow-xl border-4 border-white flex items-center justify-center gap-4 transition-all"
           >
             <ThermometerSnowflake size={36} className="text-white md:scale-150" />
             <span className="text-white text-2xl md:text-4xl font-black uppercase tracking-wider">COLD</span>
@@ -197,10 +184,7 @@ const ArcticOpposites: React.FC = () => {
           <motion.button
             whileTap={{ scale: 0.9 }}
             onClick={() => handleSelect('hot')}
-            className={`
-              h-24 md:h-32 rounded-3xl md:rounded-[2.5rem] shadow-xl border-4 border-white flex items-center justify-center gap-4 transition-all
-              ${feedback === 'correct' && currentItem.type === 'hot' ? 'bg-green-500 ring-4 ring-green-200' : 'bg-orange-500 hover:bg-orange-600'}
-            `}
+            className="h-24 md:h-32 rounded-3xl bg-orange-500 hover:bg-orange-600 shadow-xl border-4 border-white flex items-center justify-center gap-4 transition-all"
           >
             <ThermometerSun size={36} className="text-white md:scale-150" />
             <span className="text-white text-2xl md:text-4xl font-black uppercase tracking-wider">HOT</span>
@@ -210,29 +194,13 @@ const ArcticOpposites: React.FC = () => {
 
       {isVictory && (
         <div className="fixed inset-0 bg-blue-900/80 backdrop-blur-xl z-[150] flex items-center justify-center p-6 text-center">
-          <motion.div 
-            initial={{ scale: 0.8, y: 50 }} 
-            animate={{ scale: 1, y: 0 }} 
-            className="bg-white p-10 rounded-[3rem] md:rounded-[5rem] shadow-2xl max-w-sm w-full border-8 border-cyan-400 flex flex-col items-center gap-8"
-          >
+          <motion.div initial={{ scale: 0.8 }} animate={{ scale: 1 }} className="bg-white p-10 rounded-[3rem] shadow-2xl max-w-sm w-full border-8 border-cyan-400 flex flex-col items-center gap-8">
             <div className="text-8xl animate-bounce">🐧</div>
-            <div className="space-y-2">
-              <h2 className="text-3xl md:text-5xl font-black text-blue-900 uppercase leading-none">Arctic Hero!</h2>
-              <p className="text-slate-500 font-bold">You mastered hot and cold!</p>
-            </div>
-            <button 
-              onClick={() => navigate('/map')} 
-              className="w-full bg-cyan-600 text-white text-2xl font-black py-6 rounded-3xl shadow-[0_10px_0_0_#0891B2] hover:translate-y-1 hover:shadow-[0_5px_0_0_#0891B2] transition-all"
-            >
-              GREAT JOB!
-            </button>
+            <h2 className="text-3xl font-black text-blue-900 uppercase">Arctic Hero!</h2>
+            <button onClick={() => navigate('/map')} className="w-full bg-cyan-600 text-white text-2xl font-black py-6 rounded-3xl">GREAT JOB!</button>
           </motion.div>
         </div>
       )}
-
-      {/* Background Decorative Floaters */}
-      <motion.div animate={{ y: [0, 20, 0] }} transition={{ repeat: Infinity, duration: 4 }} className="absolute bottom-10 left-10 text-6xl opacity-20 pointer-events-none">❄️</motion.div>
-      <motion.div animate={{ y: [0, -30, 0] }} transition={{ repeat: Infinity, duration: 5, delay: 1 }} className="absolute top-20 right-20 text-6xl opacity-20 pointer-events-none">☁️</motion.div>
     </div>
   );
 };

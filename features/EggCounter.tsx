@@ -19,13 +19,17 @@ function decodeBase64(base64: string) {
 }
 
 async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
-  const dataInt16 = new Int16Array(data.buffer, data.byteOffset, Math.floor(data.byteLength / 2));
-  const frameCount = Math.floor(dataInt16.length / numChannels);
+  const numSamples = Math.floor(data.byteLength / 2);
+  const frameCount = Math.floor(numSamples / numChannels);
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+  const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
+
   for (let channel = 0; channel < numChannels; channel++) {
     const channelData = buffer.getChannelData(channel);
     for (let i = 0; i < frameCount; i++) {
-      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+      const sampleIndex = (i * numChannels + channel) * 2;
+      const sample = dataView.getInt16(sampleIndex, true);
+      channelData[i] = sample / 32768.0;
     }
   }
   return buffer;
@@ -43,24 +47,34 @@ const EggCounter: React.FC = () => {
 
   const GOAL = 5;
 
+  const initAudioContext = () => {
+    if (!audioContextRef.current) {
+      const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
+      audioContextRef.current = new AudioContextClass({ sampleRate: 24000 });
+    }
+    return audioContextRef.current;
+  };
+
   const speak = async (num: number) => {
-    if (isSpeaking) return;
+    if (isSpeaking || !process.env.API_KEY) return;
     const phrase = `Can you find ${num} eggs?`;
     try {
       setIsSpeaking(true);
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash-preview-tts",
         contents: [{ parts: [{ text: `Say warmly: ${phrase}` }] }],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } } },
         },
       });
-      const base64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      
+      const audioPart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.data);
+      const base64 = audioPart?.inlineData?.data;
+
       if (base64) {
-        if (!audioContextRef.current) audioContextRef.current = new AudioContext({ sampleRate: 24000 });
-        const ctx = audioContextRef.current;
+        const ctx = initAudioContext();
         if (ctx.state === 'suspended') await ctx.resume();
         const buffer = await decodeAudioData(decodeBase64(base64), ctx, 24000, 1);
         const source = ctx.createBufferSource();
@@ -86,6 +100,7 @@ const EggCounter: React.FC = () => {
   useEffect(() => { startRound(); }, []);
 
   const handleSelect = (num: number) => {
+    initAudioContext().resume();
     if (num === targetCount) {
       crackSfx.play();
       addScore(25);
@@ -102,10 +117,12 @@ const EggCounter: React.FC = () => {
   };
 
   return (
-    <div className="h-full w-full bg-[#FDF4E3] overflow-hidden flex flex-col items-center p-4 md:p-8 relative">
+    <div 
+      className="h-full w-full bg-[#FDF4E3] overflow-hidden flex flex-col items-center p-4 md:p-8 relative"
+      onClick={() => { if(progress === 0 && !isSpeaking) speak(targetCount); }}
+    >
       <Confetti active={isVictory} />
       
-      {/* Mini Progress - Moved to Top Left */}
       <div className="absolute top-4 left-4 z-10">
         <div className="bg-white/80 px-4 py-1.5 rounded-full font-black text-amber-700 text-xs border border-amber-200">
           🥚 {progress}/{GOAL}
@@ -114,7 +131,7 @@ const EggCounter: React.FC = () => {
 
       <motion.button 
         key={targetCount}
-        onClick={() => !isSpeaking && speak(targetCount)}
+        onClick={(e) => { e.stopPropagation(); speak(targetCount); }}
         className="z-30 bg-white/90 px-8 py-4 rounded-[2.5rem] shadow-xl border-4 border-amber-200 flex items-center gap-3 active:scale-95"
       >
         <Volume2 className={isSpeaking ? "text-amber-500 animate-pulse" : "text-amber-200"} size={32} />

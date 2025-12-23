@@ -28,13 +28,17 @@ function decodeBase64(base64: string) {
 }
 
 async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
-  const dataInt16 = new Int16Array(data.buffer, data.byteOffset, Math.floor(data.byteLength / 2));
-  const frameCount = Math.floor(dataInt16.length / numChannels);
+  const numSamples = Math.floor(data.byteLength / 2);
+  const frameCount = Math.floor(numSamples / numChannels);
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+  const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
+
   for (let channel = 0; channel < numChannels; channel++) {
     const channelData = buffer.getChannelData(channel);
     for (let i = 0; i < frameCount; i++) {
-      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+      const sampleIndex = (i * numChannels + channel) * 2;
+      const sample = dataView.getInt16(sampleIndex, true);
+      channelData[i] = sample / 32768.0;
     }
   }
   return buffer;
@@ -52,24 +56,32 @@ const BubblePop: React.FC = () => {
 
   const GOAL = 5;
 
+  const initAudioContext = () => {
+    if (!audioContextRef.current) {
+      const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
+      audioContextRef.current = new AudioContextClass({ sampleRate: 24000 });
+    }
+    return audioContextRef.current;
+  };
+
   const speak = async (color: string) => {
-    if (isSpeaking) return;
+    if (isSpeaking || !process.env.API_KEY) return;
     const phrase = `Pop the ${color} bubbles!`;
     try {
       setIsSpeaking(true);
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash-preview-tts",
         contents: [{ parts: [{ text: `Say cheerfully: ${phrase}` }] }],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
         },
       });
-      const base64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      const audioPart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.data);
+      const base64 = audioPart?.inlineData?.data;
       if (base64) {
-        if (!audioContextRef.current) audioContextRef.current = new AudioContext({ sampleRate: 24000 });
-        const ctx = audioContextRef.current;
+        const ctx = initAudioContext();
         if (ctx.state === 'suspended') await ctx.resume();
         const buffer = await decodeAudioData(decodeBase64(base64), ctx, 24000, 1);
         const source = ctx.createBufferSource();
@@ -95,11 +107,11 @@ const BubblePop: React.FC = () => {
 
   useEffect(() => {
     const interval = setInterval(spawnBubble, 1200);
-    speak(targetColor.label);
     return () => clearInterval(interval);
-  }, [targetColor, spawnBubble]);
+  }, [spawnBubble]);
 
   const handlePop = (id: number, colorId: string) => {
+    initAudioContext().resume();
     if (colorId === targetColor.id) {
       popSfx.play();
       addScore(15);
@@ -113,6 +125,7 @@ const BubblePop: React.FC = () => {
       } else {
         const nextColor = COLORS[Math.floor(Math.random() * COLORS.length)];
         setTargetColor(nextColor);
+        speak(nextColor.label);
       }
     } else {
       setBubbles(prev => prev.filter(b => b.id !== id));
@@ -120,10 +133,12 @@ const BubblePop: React.FC = () => {
   };
 
   return (
-    <div className="h-full w-full bg-gradient-to-b from-cyan-400 to-blue-600 overflow-hidden flex flex-col items-center p-4 relative">
+    <div 
+      className="h-full w-full bg-gradient-to-b from-cyan-400 to-blue-600 overflow-hidden flex flex-col items-center p-4 relative"
+      onClick={() => { if(progress === 0 && !isSpeaking) speak(targetColor.label); }}
+    >
       <Confetti active={isVictory} />
       
-      {/* Mini Progress - Moved to Top Left */}
       <div className="absolute top-4 left-4 z-20">
         <div className="bg-white/20 backdrop-blur-md px-4 py-1.5 rounded-full font-black text-white text-xs border border-white/30">
           🫧 {progress}/{GOAL}
@@ -132,7 +147,7 @@ const BubblePop: React.FC = () => {
 
       <motion.button 
         key={targetColor.id}
-        onClick={() => !isSpeaking && speak(targetColor.label)}
+        onClick={(e) => { e.stopPropagation(); speak(targetColor.label); }}
         className="z-30 bg-white px-10 py-5 rounded-[2.5rem] shadow-2xl flex flex-col items-center border-4 border-white active:scale-95"
       >
         <span className="text-slate-400 font-black tracking-widest text-[10px] uppercase mb-1">Pop</span>

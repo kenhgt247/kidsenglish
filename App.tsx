@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Home as HomeIcon, Map as MapIcon, Trophy, RotateCw, Menu, X } from 'lucide-react';
+import { Home as HomeIcon, Map as MapIcon, Menu, X, Key, AlertTriangle } from 'lucide-react';
 import { GameProvider, useGame } from './GameContext.tsx';
 
 // Features Import
@@ -32,83 +32,65 @@ import SizeExplorer from './features/SizeExplorer.tsx';
 import DinoFinale from './features/DinoFinale.tsx';
 
 const Navigation = () => {
-  const { state } = useGame();
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
+  const [hasKey, setHasKey] = useState(true);
 
-  // Hide nav icons in game to prevent distraction, but keep score
-  const isGame = location.pathname.startsWith('/game/');
+  useEffect(() => {
+    const checkKey = async () => {
+      if (window.aistudio?.hasSelectedApiKey) {
+        const selected = await window.aistudio.hasSelectedApiKey();
+        setHasKey(selected);
+      }
+    };
+    checkKey();
+  }, [location.pathname]);
+
+  const handleSelectKey = async () => {
+    if (window.aistudio?.openSelectKey) {
+      await window.aistudio.openSelectKey();
+      setHasKey(true);
+      setIsOpen(false);
+    }
+  };
+
+  // Ẩn Navigation ở màn hình Home để không chặn nút Play
+  if (location.pathname === '/') return null;
 
   return (
-    <div className="fixed top-4 right-4 z-[100] flex flex-col items-end gap-3">
-      <div className="bg-white/90 backdrop-blur-md px-4 py-2 rounded-2xl shadow-md border-2 border-yellow-100 flex items-center gap-2 mb-1">
-        <Trophy className="text-yellow-500" size={18} />
-        <span className="font-black text-slate-700 text-sm">{state.score}</span>
-      </div>
-
-      <div className="relative">
-        <AnimatePresence>
-          {isOpen && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.5, y: -20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.5, y: -20 }}
-              className="absolute top-16 right-0 flex flex-col gap-3"
+    <div className="fixed bottom-6 right-6 z-[999] flex flex-col items-end gap-3 pointer-events-none">
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.5, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.5, y: 20 }}
+            className="flex flex-col gap-3 mb-3 pointer-events-auto"
+          >
+            <button 
+              onClick={handleSelectKey}
+              className={`w-14 h-14 md:w-16 md:h-16 rounded-full shadow-2xl border-4 flex items-center justify-center transition-all active:scale-90 ${hasKey ? 'bg-indigo-500 border-indigo-100 text-white' : 'bg-rose-500 border-rose-100 text-white animate-pulse'}`}
             >
-              <Link to="/" onClick={() => setIsOpen(false)} className="w-14 h-14 bg-white rounded-full shadow-xl border-2 border-sky-100 text-slate-500 flex items-center justify-center hover:bg-sky-50 transition-colors">
-                <HomeIcon size={24} />
-              </Link>
-              <Link to="/map" onClick={() => setIsOpen(false)} className="w-14 h-14 bg-white rounded-full shadow-xl border-2 border-sky-100 text-slate-500 flex items-center justify-center hover:bg-sky-50 transition-colors">
-                <MapIcon size={24} />
-              </Link>
-            </motion.div>
-          )}
-        </AnimatePresence>
+              <Key size={24} />
+            </button>
+            <Link to="/" onClick={() => setIsOpen(false)} className="w-14 h-14 md:w-16 md:h-16 bg-white rounded-full shadow-2xl border-4 border-sky-100 text-sky-500 flex items-center justify-center hover:bg-sky-50 transition-all">
+              <HomeIcon size={24} />
+            </Link>
+            <Link to="/map" onClick={() => setIsOpen(false)} className="w-14 h-14 md:w-16 md:h-16 bg-white rounded-full shadow-2xl border-4 border-emerald-100 text-emerald-500 flex items-center justify-center hover:bg-emerald-50 transition-all">
+              <MapIcon size={24} />
+            </Link>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-        <motion.button
-          whileTap={{ scale: 0.9 }}
-          onClick={() => setIsOpen(!isOpen)}
-          className={`w-14 h-14 rounded-full shadow-2xl flex items-center justify-center border-4 border-white transition-all ${isOpen ? 'bg-slate-800 text-white' : 'bg-dino-green text-white'}`}
-        >
-          {isOpen ? <X size={28} /> : <Menu size={28} />}
-        </motion.button>
-      </div>
+      <motion.button
+        whileTap={{ scale: 0.85 }}
+        onClick={() => setIsOpen(!isOpen)}
+        className={`w-16 h-16 md:w-20 md:h-20 rounded-full shadow-2xl flex items-center justify-center border-4 border-white transition-all pointer-events-auto ${isOpen ? 'bg-slate-800 text-white' : 'bg-game-orange text-white'}`}
+      >
+        {isOpen ? <X size={28} /> : <Menu size={28} />}
+      </motion.button>
     </div>
-  );
-};
-
-const AnimatedRoutes = () => {
-  const location = useLocation();
-  return (
-    <AnimatePresence mode="wait">
-      <Routes location={location} key={location.pathname}>
-        <Route path="/" element={<Home />} />
-        <Route path="/map" element={<Map />} />
-        {/* All 22 Game Routes */}
-        <Route path="/game/feed" element={<FeedTheDino />} />
-        <Route path="/game/jungle" element={<WordJungle />} />
-        <Route path="/game/volcano" element={<AlphaVolcano />} />
-        <Route path="/game/bubbles" element={<BubblePop />} />
-        <Route path="/game/eggs" element={<EggCounter />} />
-        <Route path="/game/desert" element={<ShapeDesert />} />
-        <Route path="/game/arctic" element={<ArcticOpposites />} />
-        <Route path="/game/ocean" element={<OceanVerbs />} />
-        <Route path="/game/space" element={<SpacePhonics />} />
-        <Route path="/game/farm" element={<FarmFeelings />} />
-        <Route path="/game/rainbow" element={<RainbowColors />} />
-        <Route path="/game/dressup" element={<DinoDressUp />} />
-        <Route path="/game/math" element={<MagicMath />} />
-        <Route path="/game/weather" element={<WeatherWatch />} />
-        <Route path="/game/bugs" element={<PrepositionBugs />} />
-        <Route path="/game/routine" element={<DailyRoutine />} />
-        <Route path="/game/plurals" element={<PluralFruits />} />
-        <Route path="/game/parlor" element={<PetParlor />} />
-        <Route path="/game/chef" element={<KitchenChef />} />
-        <Route path="/game/traffic" element={<TrafficHero />} />
-        <Route path="/game/size" element={<SizeExplorer />} />
-        <Route path="/game/finale" element={<DinoFinale />} />
-      </Routes>
-    </AnimatePresence>
   );
 };
 
@@ -116,9 +98,36 @@ const App: React.FC = () => {
   return (
     <GameProvider>
       <HashRouter>
-        <div className="h-[100dvh] w-full bg-[#F0F9FF] selection:bg-dino-green/30 overflow-hidden flex flex-col relative">
+        <div className="h-[100dvh] w-full bg-[#F0F9FF] overflow-hidden flex flex-col relative">
           <div className="flex-1 w-full max-w-[1440px] mx-auto relative bg-white overflow-hidden shadow-2xl">
-             <AnimatedRoutes />
+             <AnimatePresence mode="wait">
+                <Routes>
+                  <Route path="/" element={<Home />} />
+                  <Route path="/map" element={<Map />} />
+                  <Route path="/game/feed" element={<FeedTheDino />} />
+                  <Route path="/game/jungle" element={<WordJungle />} />
+                  <Route path="/game/volcano" element={<AlphaVolcano />} />
+                  <Route path="/game/bubbles" element={<BubblePop />} />
+                  <Route path="/game/eggs" element={<EggCounter />} />
+                  <Route path="/game/desert" element={<ShapeDesert />} />
+                  <Route path="/game/arctic" element={<ArcticOpposites />} />
+                  <Route path="/game/ocean" element={<OceanVerbs />} />
+                  <Route path="/game/space" element={<SpacePhonics />} />
+                  <Route path="/game/farm" element={<FarmFeelings />} />
+                  <Route path="/game/rainbow" element={<RainbowColors />} />
+                  <Route path="/game/dressup" element={<DinoDressUp />} />
+                  <Route path="/game/math" element={<MagicMath />} />
+                  <Route path="/game/weather" element={<WeatherWatch />} />
+                  <Route path="/game/bugs" element={<PrepositionBugs />} />
+                  <Route path="/game/routine" element={<DailyRoutine />} />
+                  <Route path="/game/plurals" element={<PluralFruits />} />
+                  <Route path="/game/parlor" element={<PetParlor />} />
+                  <Route path="/game/chef" element={<KitchenChef />} />
+                  <Route path="/game/traffic" element={<TrafficHero />} />
+                  <Route path="/game/size" element={<SizeExplorer />} />
+                  <Route path="/game/finale" element={<DinoFinale />} />
+                </Routes>
+             </AnimatePresence>
              <Navigation />
           </div>
         </div>

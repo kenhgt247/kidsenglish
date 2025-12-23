@@ -27,13 +27,16 @@ function decodeBase64(base64: string) {
 }
 
 async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
-  const dataInt16 = new Int16Array(data.buffer, data.byteOffset, Math.floor(data.byteLength / 2));
-  const frameCount = Math.floor(dataInt16.length / numChannels);
+  const numSamples = Math.floor(data.byteLength / 2);
+  const frameCount = Math.floor(numSamples / numChannels);
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+  const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
   for (let channel = 0; channel < numChannels; channel++) {
     const channelData = buffer.getChannelData(channel);
     for (let i = 0; i < frameCount; i++) {
-      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+      const sampleIndex = (i * numChannels + channel) * 2;
+      const sample = dataView.getInt16(sampleIndex, true);
+      channelData[i] = sample / 32768.0;
     }
   }
   return buffer;
@@ -50,23 +53,31 @@ const SpacePhonics: React.FC = () => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const GOAL = 5;
 
+  const initAudioContext = () => {
+    if (!audioContextRef.current) {
+      const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
+      audioContextRef.current = new AudioContextClass({ sampleRate: 24000 });
+    }
+    return audioContextRef.current;
+  };
+
   const speak = async (text: string) => {
-    if (isSpeaking) return;
+    if (isSpeaking || !process.env.API_KEY) return;
     try {
       setIsSpeaking(true);
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-2.5-flash-preview-tts',
         contents: [{ parts: [{ text: `Where is the letter for ${text}?` }] }],
         config: { 
           responseModalities: [Modality.AUDIO],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Charon' } } }
         }
       });
-      const base64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      const audioPart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.data);
+      const base64 = audioPart?.inlineData?.data;
       if (base64) {
-         if (!audioContextRef.current) audioContextRef.current = new AudioContext({ sampleRate: 24000 });
-         const ctx = audioContextRef.current;
+         const ctx = initAudioContext();
          if (ctx.state === 'suspended') await ctx.resume();
          const buffer = await decodeAudioData(decodeBase64(base64), ctx, 24000, 1);
          const source = ctx.createBufferSource();
@@ -97,13 +108,14 @@ const SpacePhonics: React.FC = () => {
   }, []);
 
   const handleSelect = (char: string) => {
+    initAudioContext().resume();
     if (char === target.char) {
       addScore(50);
       const nextProgress = progress + 1;
       setProgress(nextProgress);
       if (nextProgress >= GOAL) {
         setIsVictory(true);
-        unlockLevel(10); // Đảm bảo mở khóa màn 10
+        unlockLevel(10);
       } else {
         nextRound();
       }
@@ -111,25 +123,12 @@ const SpacePhonics: React.FC = () => {
   };
 
   return (
-    <div className="h-full bg-[#0F172A] overflow-hidden flex flex-col p-4 md:p-8 relative">
+    <div 
+      className="h-full bg-[#0F172A] overflow-hidden flex flex-col p-4 md:p-8 relative"
+      onClick={() => { if(progress === 0 && !isSpeaking) speak(target.word); }}
+    >
       <Confetti active={isVictory} />
       
-      {/* Background stars */}
-      {[...Array(20)].map((_, i) => (
-        <motion.div
-          key={i}
-          animate={{ opacity: [0.2, 1, 0.2] }}
-          transition={{ repeat: Infinity, duration: 2 + i % 3 }}
-          className="absolute bg-white rounded-full"
-          style={{ 
-            width: Math.random() * 4, 
-            height: Math.random() * 4, 
-            top: `${Math.random() * 100}%`, 
-            left: `${Math.random() * 100}%` 
-          }}
-        />
-      ))}
-
       <div className="absolute top-4 left-4 z-10 bg-white/10 backdrop-blur-sm px-4 py-1.5 rounded-full text-xs font-black text-indigo-300 border border-white/10">
         🛸 SPACE: {progress}/{GOAL}
       </div>
@@ -145,10 +144,10 @@ const SpacePhonics: React.FC = () => {
             {target.icon}
           </div>
           <button 
-            onClick={() => speak(target.word)}
+            onClick={(e) => { e.stopPropagation(); speak(target.word); }}
             className="flex items-center gap-4 bg-indigo-600 text-white px-10 py-5 rounded-3xl font-black text-2xl md:text-4xl shadow-2xl active:scale-95 transition-all"
           >
-            <Volume2 size={40} className={isSpeaking ? 'animate-pulse' : ''} />
+            <Volume2 className={isSpeaking ? 'animate-pulse' : ''} size={40} />
             <span className="uppercase tracking-widest">{target.word}</span>
           </button>
         </motion.div>
@@ -173,10 +172,8 @@ const SpacePhonics: React.FC = () => {
           <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="bg-white p-12 rounded-[4rem] shadow-2xl max-w-sm w-full border-8 border-indigo-400 flex flex-col items-center gap-8">
             <div className="relative">
               <Rocket size={80} className="text-indigo-600 animate-bounce" />
-              <motion.div animate={{ scale: [1, 1.5, 1], opacity: [0.5, 1, 0.5] }} transition={{ repeat: Infinity }} className="absolute -inset-4 bg-indigo-100 rounded-full -z-10" />
             </div>
             <h2 className="text-4xl font-black text-indigo-900 uppercase leading-none">Star Pilot!</h2>
-            <p className="text-slate-500 font-bold">You found all the letters!</p>
             <button onClick={() => navigate('/map')} className="w-full bg-indigo-600 text-white text-3xl font-black py-6 rounded-3xl shadow-[0_12px_0_0_#4338CA] active:translate-y-1 transition-all">
               MAP <Rocket size={24} className="inline ml-2" />
             </button>

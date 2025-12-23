@@ -21,13 +21,16 @@ function decodeBase64(base64: string) {
 }
 
 async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
-  const dataInt16 = new Int16Array(data.buffer, data.byteOffset, Math.floor(data.byteLength / 2));
-  const frameCount = Math.floor(dataInt16.length / numChannels);
+  const numSamples = Math.floor(data.byteLength / 2);
+  const frameCount = Math.floor(numSamples / numChannels);
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+  const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
   for (let channel = 0; channel < numChannels; channel++) {
     const channelData = buffer.getChannelData(channel);
     for (let i = 0; i < frameCount; i++) {
-      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+      const sampleIndex = (i * numChannels + channel) * 2;
+      const sample = dataView.getInt16(sampleIndex, true);
+      channelData[i] = sample / 32768.0;
     }
   }
   return buffer;
@@ -45,24 +48,31 @@ const AlphaVolcano: React.FC = () => {
 
   const GOAL = 5;
 
+  const initAudioContext = () => {
+    if (!audioContextRef.current) {
+      const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
+      audioContextRef.current = new AudioContextClass({ sampleRate: 24000 });
+    }
+    return audioContextRef.current;
+  };
+
   const speak = async (letter: string) => {
-    if (isSpeaking) return;
-    const phrase = `Catch the letter ${letter}!`;
+    if (isSpeaking || !process.env.API_KEY) return;
     try {
       setIsSpeaking(true);
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: [{ parts: [{ text: `Say excitedly: ${phrase}` }] }],
+        model: "gemini-2.5-flash-preview-tts",
+        contents: [{ parts: [{ text: `Catch the letter ${letter}!` }] }],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Charon' } } },
         },
       });
-      const base64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      const audioPart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.data);
+      const base64 = audioPart?.inlineData?.data;
       if (base64) {
-        if (!audioContextRef.current) audioContextRef.current = new AudioContext({ sampleRate: 24000 });
-        const ctx = audioContextRef.current;
+        const ctx = initAudioContext();
         if (ctx.state === 'suspended') await ctx.resume();
         const buffer = await decodeAudioData(decodeBase64(base64), ctx, 24000, 1);
         const source = ctx.createBufferSource();
@@ -93,6 +103,7 @@ const AlphaVolcano: React.FC = () => {
   }, [targetLetter, spawnLetter]);
 
   const handleCatch = (id: number, char: string) => {
+    initAudioContext().resume();
     if (char === targetLetter) {
       splashSfx.play();
       addScore(20);
@@ -113,10 +124,12 @@ const AlphaVolcano: React.FC = () => {
   };
 
   return (
-    <div className="h-full w-full bg-orange-950 overflow-hidden flex flex-col items-center p-4 relative">
+    <div 
+      className="h-full w-full bg-orange-950 overflow-hidden flex flex-col items-center p-4 relative"
+      onClick={() => { if(progress === 0 && !isSpeaking) speak(targetLetter); }}
+    >
       <Confetti active={isVictory} />
       
-      {/* Mini Progress - Moved to Top Left */}
       <div className="absolute top-4 left-4 z-20">
         <div className="bg-orange-600/80 px-4 py-1.5 rounded-full font-black text-white text-xs border border-orange-400">
           <Flame className="inline-block mr-1" size={12} /> {progress}/{GOAL}
@@ -125,8 +138,8 @@ const AlphaVolcano: React.FC = () => {
 
       <motion.button 
         key={targetLetter}
-        onClick={() => !isSpeaking && speak(targetLetter)}
-        className="z-30 bg-white/10 backdrop-blur-xl px-8 py-4 rounded-[2rem] border-2 border-orange-400/50 flex flex-col items-center shadow-2xl active:scale-95"
+        onClick={(e) => { e.stopPropagation(); speak(targetLetter); }}
+        className="z-30 bg-white/10 backdrop-blur-xl px-8 py-4 rounded-[2rem] border-2 border-orange-400/50 flex flex-col items-center shadow-2xl active:scale-95 transition-transform"
       >
         <span className="text-white/40 font-black tracking-widest text-[10px] uppercase">Catch</span>
         <div className="flex items-center gap-3">

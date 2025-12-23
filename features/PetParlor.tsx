@@ -14,6 +14,29 @@ const PARTS = [
   { id: 'paws', label: 'PAWS', pos: 'bottom-[10%] left-[40%]', prompt: 'Touch the dog\'s paws!' },
 ];
 
+function decodeBase64(base64: string) {
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+  return bytes;
+}
+
+async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
+  const numSamples = Math.floor(data.byteLength / 2);
+  const frameCount = Math.floor(numSamples / numChannels);
+  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+  const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  for (let channel = 0; channel < numChannels; channel++) {
+    const channelData = buffer.getChannelData(channel);
+    for (let i = 0; i < frameCount; i++) {
+      const sampleIndex = (i * numChannels + channel) * 2;
+      const sample = dataView.getInt16(sampleIndex, true);
+      channelData[i] = sample / 32768.0;
+    }
+  }
+  return buffer;
+}
+
 const PetParlor: React.FC = () => {
   const navigate = useNavigate();
   const { addScore, unlockLevel } = useGame();
@@ -23,27 +46,33 @@ const PetParlor: React.FC = () => {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const audioContextRef = useRef<AudioContext | null>(null);
 
+  const initAudioContext = () => {
+    if (!audioContextRef.current) {
+      const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
+      audioContextRef.current = new AudioContextClass({ sampleRate: 24000 });
+    }
+    return audioContextRef.current;
+  };
+
   const speak = async (txt: string) => {
-    if (isSpeaking) return;
+    if (isSpeaking || !process.env.API_KEY) return;
     try {
       setIsSpeaking(true);
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-2.5-flash-preview-tts',
         contents: [{ parts: [{ text: txt }] }],
-        config: { responseModalities: [Modality.AUDIO] }
+        config: { 
+          responseModalities: [Modality.AUDIO],
+          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } }
+        }
       });
-      const base64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      const audioPart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.data);
+      const base64 = audioPart?.inlineData?.data;
       if (base64) {
-         const ctx = audioContextRef.current || new AudioContext({ sampleRate: 24000 });
-         audioContextRef.current = ctx;
-         const binary = atob(base64);
-         const bytes = new Uint8Array(binary.length);
-         for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-         const dataInt16 = new Int16Array(bytes.buffer);
-         const buffer = ctx.createBuffer(1, dataInt16.length, 24000);
-         const channelData = buffer.getChannelData(0);
-         for (let i = 0; i < dataInt16.length; i++) channelData[i] = dataInt16[i] / 32768.0;
+         const ctx = initAudioContext();
+         if (ctx.state === 'suspended') await ctx.resume();
+         const buffer = await decodeAudioData(decodeBase64(base64), ctx, 24000, 1);
          const source = ctx.createBufferSource();
          source.buffer = buffer;
          source.connect(ctx.destination);
@@ -62,6 +91,7 @@ const PetParlor: React.FC = () => {
   useEffect(() => { nextRound(); }, []);
 
   const handleTouch = (id: string) => {
+    initAudioContext().resume();
     if (id === target.id) {
       addScore(50);
       const n = progress + 1;
@@ -72,7 +102,10 @@ const PetParlor: React.FC = () => {
   };
 
   return (
-    <div className="h-full bg-emerald-50 flex flex-col items-center justify-center p-8 relative overflow-hidden">
+    <div 
+      className="h-full bg-emerald-50 flex flex-col items-center justify-center p-8 relative overflow-hidden"
+      onClick={() => { if(progress === 0 && !isSpeaking) speak(target.prompt); }}
+    >
       <Confetti active={isVictory} />
       <div className="absolute top-4 left-4 bg-emerald-600 text-white px-4 py-1 rounded-full font-black uppercase text-xs">Pet Parlor: {progress}/4</div>
 
@@ -84,7 +117,6 @@ const PetParlor: React.FC = () => {
         <div className="relative w-full aspect-video max-h-[60vh] flex items-center justify-center">
           <span className="text-[15rem] md:text-[25rem] select-none">🐶</span>
           
-          {/* Touch Targets */}
           {PARTS.map(p => (
             <motion.button
               key={p.id}
@@ -92,7 +124,7 @@ const PetParlor: React.FC = () => {
               onClick={() => handleTouch(p.id)}
               className={`absolute w-24 h-24 rounded-full flex items-center justify-center border-4 border-white/50 bg-white/10 ${p.pos} hover:bg-white/20 transition-all`}
             >
-              <div className="w-4 h-4 bg-white rounded-full opacity-0 group-hover:opacity-100" />
+              <div className="w-4 h-4 bg-white rounded-full opacity-0" />
             </motion.button>
           ))}
         </div>

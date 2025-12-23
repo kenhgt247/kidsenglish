@@ -29,13 +29,16 @@ function decodeBase64(base64: string) {
 }
 
 async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
-  const dataInt16 = new Int16Array(data.buffer, data.byteOffset, Math.floor(data.byteLength / 2));
-  const frameCount = Math.floor(dataInt16.length / numChannels);
+  const numSamples = Math.floor(data.byteLength / 2);
+  const frameCount = Math.floor(numSamples / numChannels);
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+  const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
   for (let channel = 0; channel < numChannels; channel++) {
     const channelData = buffer.getChannelData(channel);
     for (let i = 0; i < frameCount; i++) {
-      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+      const sampleIndex = (i * numChannels + channel) * 2;
+      const sample = dataView.getInt16(sampleIndex, true);
+      channelData[i] = sample / 32768.0;
     }
   }
   return buffer;
@@ -51,23 +54,31 @@ const DinoDressUp: React.FC = () => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const dinoContainerRef = useRef<HTMLDivElement>(null);
 
+  const initAudioContext = () => {
+    if (!audioContextRef.current) {
+      const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
+      audioContextRef.current = new AudioContextClass({ sampleRate: 24000 });
+    }
+    return audioContextRef.current;
+  };
+
   const speak = async (itemName: string) => {
-    if (isSpeaking) return;
+    if (isSpeaking || !process.env.API_KEY) return;
     try {
       setIsSpeaking(true);
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-2.5-flash-preview-tts',
         contents: [{ parts: [{ text: `Can you help me put on my ${itemName}?` }] }],
         config: { 
           responseModalities: [Modality.AUDIO],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } } }
         }
       });
-      const base64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      const audioPart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.data);
+      const base64 = audioPart?.inlineData?.data;
       if (base64) {
-         if (!audioContextRef.current) audioContextRef.current = new AudioContext({ sampleRate: 24000 });
-         const ctx = audioContextRef.current;
+         const ctx = initAudioContext();
          if (ctx.state === 'suspended') await ctx.resume();
          const buffer = await decodeAudioData(decodeBase64(base64), ctx, 24000, 1);
          const source = ctx.createBufferSource();
@@ -84,6 +95,7 @@ const DinoDressUp: React.FC = () => {
   }, [currentTarget]);
 
   const handleDragEnd = (event: any, info: any, item: any) => {
+    initAudioContext().resume();
     if (item.id !== currentTarget.id) return;
     const dinoRect = dinoContainerRef.current?.getBoundingClientRect();
     if (!dinoRect) return;
@@ -108,7 +120,10 @@ const DinoDressUp: React.FC = () => {
   };
 
   return (
-    <div className="h-full bg-slate-100 overflow-hidden flex flex-col p-4 md:p-8 relative">
+    <div 
+      className="h-full bg-slate-100 overflow-hidden flex flex-col p-4 md:p-8 relative"
+      onClick={() => { if(dressedItems.length === 0 && !isSpeaking) speak(currentTarget.label.toLowerCase()); }}
+    >
       <Confetti active={isVictory} />
       <div className="flex-1 flex flex-row items-center justify-around z-10 gap-4">
         <div className="bg-white/50 backdrop-blur-md p-4 md:p-6 rounded-[3rem] border-4 border-white shadow-xl flex flex-col gap-4 max-h-[85vh] overflow-y-auto no-scrollbar">
@@ -135,7 +150,7 @@ const DinoDressUp: React.FC = () => {
           </div>
         </div>
         <div className="relative flex-1 flex flex-col items-center gap-4 md:gap-8">
-          <motion.button onClick={() => speak(currentTarget.label.toLowerCase())} className="bg-sky-500 text-white px-6 py-3 md:px-8 md:py-4 rounded-full font-black text-lg md:text-2xl shadow-xl flex items-center gap-4 active:scale-95 transition-all z-20">
+          <motion.button onClick={(e) => { e.stopPropagation(); speak(currentTarget.label.toLowerCase()); }} className="bg-sky-500 text-white px-6 py-3 md:px-8 md:py-4 rounded-full font-black text-lg md:text-2xl shadow-xl flex items-center gap-4 active:scale-95 transition-all z-20">
             <Volume2 className={isSpeaking ? 'animate-bounce' : ''} size={28} />
             PUT ON THE {currentTarget.label}!
           </motion.button>
