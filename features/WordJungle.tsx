@@ -27,7 +27,7 @@ function decodeBase64(base64: string) {
   return bytes;
 }
 
-async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
+async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer | null> {
   const numSamples = Math.floor(data.byteLength / 2);
   const frameCount = Math.floor(numSamples / numChannels);
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
@@ -36,8 +36,10 @@ async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: 
     const channelData = buffer.getChannelData(channel);
     for (let i = 0; i < frameCount; i++) {
       const sampleIndex = (i * numChannels + channel) * 2;
-      const sample = dataView.getInt16(sampleIndex, true);
-      channelData[i] = sample / 32768.0;
+      if (sampleIndex + 1 < data.byteLength) {
+        const sample = dataView.getInt16(sampleIndex, true);
+        channelData[i] = sample / 32768.0;
+      }
     }
   }
   return buffer;
@@ -63,31 +65,30 @@ const WordJungle: React.FC = () => {
 
   const speak = async (word: string) => {
     if (isSpeaking || !process.env.API_KEY) return;
-    const phrase = `Where is the ${word}?`;
     try {
       setIsSpeaking(true);
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Say playfully: ${phrase}` }] }],
+        contents: [{ parts: [{ text: `Speak in a very clear, friendly British accent for a young child: "Where is the ${word}? Can you find the ${word}?"` }] }],
         config: {
           responseModalities: [Modality.AUDIO],
-          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } } },
+          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
         },
       });
       
       const audioPart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.data);
-      const base64 = audioPart?.inlineData?.data;
-
-      if (base64) {
+      if (audioPart?.inlineData?.data) {
         const ctx = initAudioContext();
         if (ctx.state === 'suspended') await ctx.resume();
-        const buffer = await decodeAudioData(decodeBase64(base64), ctx, 24000, 1);
-        const source = ctx.createBufferSource();
-        source.buffer = buffer;
-        source.connect(ctx.destination);
-        source.onended = () => setIsSpeaking(false);
-        source.start();
+        const buffer = await decodeAudioData(decodeBase64(audioPart.inlineData.data), ctx, 24000, 1);
+        if (buffer) {
+          const source = ctx.createBufferSource();
+          source.buffer = buffer;
+          source.connect(ctx.destination);
+          source.onended = () => setIsSpeaking(false);
+          source.start();
+        } else { setIsSpeaking(false); }
       } else { setIsSpeaking(false); }
     } catch { setIsSpeaking(false); }
   };
@@ -118,59 +119,44 @@ const WordJungle: React.FC = () => {
   };
 
   return (
-    <div 
-      className="h-full w-full bg-emerald-50 overflow-hidden p-4 md:p-8 flex flex-col items-center relative"
-      onClick={() => { if(progress === 0 && !isSpeaking) speak(target.label); }}
-    >
+    <div className="h-full w-full bg-emerald-50 overflow-hidden p-8 flex flex-col items-center relative">
       <Confetti active={isVictory} />
-      
-      <div className="absolute top-4 left-4 z-20">
-        <div className="bg-white/80 px-4 py-2 rounded-2xl shadow-sm border border-emerald-100 font-black text-emerald-600 text-sm">
-          {progress}/5
-        </div>
+      <div className="absolute top-4 left-4 z-20 bg-white/80 px-4 py-2 rounded-2xl shadow-sm font-black text-emerald-600">
+        {progress}/5
       </div>
-
       <motion.button 
         key={target.id}
-        onClick={(e) => { e.stopPropagation(); speak(target.label); }}
-        className="z-30 bg-white px-8 py-4 rounded-[2rem] shadow-xl border-4 border-emerald-200 flex items-center gap-4 mb-6 active:scale-95 transition-transform"
+        onClick={() => speak(target.label)}
+        className="z-30 bg-white px-10 py-6 rounded-[2.5rem] shadow-xl border-4 border-emerald-200 flex items-center gap-4 mb-10 active:scale-95 transition-all"
       >
-        <Volume2 className={isSpeaking ? "text-emerald-500 animate-pulse" : "text-slate-300"} size={32} />
-        <span className="text-2xl md:text-4xl font-black text-slate-800 uppercase">Find the {target.label}</span>
+        <Volume2 className={isSpeaking ? "text-emerald-500 animate-pulse" : "text-slate-300"} size={40} />
+        <span className="text-3xl md:text-4xl font-black text-slate-800 uppercase">FIND THE {target.label}</span>
       </motion.button>
-
       <div className="flex-1 w-full relative">
         <AnimatePresence>
           {!isVictory && options.map((item, idx) => (
             <motion.button
               key={`${item.id}-${progress}`}
               initial={{ scale: 0, y: 500 }}
-              animate={{ 
-                scale: 1, 
-                y: [-100, 600], 
-                x: [0, Math.sin(idx + progress) * 80]
-              }}
+              animate={{ scale: 1, y: [-50, 500], x: [0, Math.sin(idx + progress) * 100] }}
               exit={{ scale: 0 }}
-              transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
+              transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
               onClick={() => handleSelect(item)}
-              className="absolute w-28 h-28 md:w-40 md:h-40 bg-white/90 backdrop-blur-sm rounded-full shadow-2xl border-4 border-white flex flex-col items-center justify-center active:scale-125 z-20"
-              style={{ left: `${15 + idx * 30}%` }}
+              className="absolute w-32 h-32 md:w-48 md:h-48 bg-white/90 backdrop-blur-sm rounded-full shadow-2xl border-4 border-white flex flex-col items-center justify-center active:scale-125 z-20"
+              style={{ left: `${10 + idx * 35}%` }}
             >
-              <span className="text-5xl md:text-7xl mb-1">{item.icon}</span>
-              <span className="text-emerald-600 font-black text-[10px] md:text-xs uppercase">{item.label}</span>
+              <span className="text-6xl md:text-8xl mb-2">{item.icon}</span>
+              <span className="text-emerald-600 font-black text-sm uppercase">{item.label}</span>
             </motion.button>
           ))}
         </AnimatePresence>
       </div>
-
       {isVictory && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-emerald-900/70 backdrop-blur-md">
-          <div className="bg-white p-10 rounded-[3rem] text-center shadow-2xl flex flex-col items-center gap-6 max-w-sm w-full">
-            <div className="text-7xl">🌴</div>
-            <h2 className="text-3xl font-black text-slate-800 uppercase">Explorer!</h2>
-            <button onClick={() => navigate('/map')} className="w-full bg-game-orange text-white text-xl font-black py-5 rounded-2xl shadow-[0_6px_0_0_#EA580C]">
-              CONTINUE
-            </button>
+          <div className="bg-white p-12 rounded-[4rem] text-center shadow-2xl flex flex-col items-center gap-8 max-w-sm w-full border-8 border-emerald-400">
+            <div className="text-8xl">🌴</div>
+            <h2 className="text-4xl font-black text-slate-800 uppercase">Super!</h2>
+            <button onClick={() => navigate('/map')} className="w-full bg-orange-500 text-white text-2xl font-black py-6 rounded-3xl shadow-[0_8px_0_0_#EA580C] active:translate-y-1 transition-all uppercase">CONTINUE</button>
           </div>
         </motion.div>
       )}
