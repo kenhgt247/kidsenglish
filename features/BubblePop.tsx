@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Volume2, ChevronRight } from 'lucide-react';
@@ -58,16 +59,31 @@ const BubblePop: React.FC = () => {
   };
 
   const speak = async (color: string) => {
-    if (isSpeaking || !process.env.API_KEY) return;
+    if (isSpeaking) return;
+    const phrase = `Pop the ${color} bubbles!`;
+
+    const useFallback = () => {
+      setIsSpeaking(true);
+      const utterance = new SpeechSynthesisUtterance(phrase);
+      utterance.lang = 'en-GB';
+      utterance.onend = () => setIsSpeaking(false);
+      utterance.onerror = () => setIsSpeaking(false);
+      window.speechSynthesis.speak(utterance);
+    };
+
+    if (!process.env.API_KEY) {
+      useFallback();
+      return;
+    }
+
     try {
       setIsSpeaking(true);
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Can you pop the ${color} bubbles, please?` }] }],
+        contents: [{ parts: [{ text: phrase }] }],
         config: {
           responseModalities: [Modality.AUDIO],
-          systemInstruction: "You are a warm, clear British English teacher for toddlers. Use a friendly UK accent. Speak slowly and clearly. Encourage the child.",
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
         },
       });
@@ -81,26 +97,33 @@ const BubblePop: React.FC = () => {
         source.connect(ctx.destination);
         source.onended = () => setIsSpeaking(false);
         source.start();
-      } else setIsSpeaking(false);
-    } catch { setIsSpeaking(false); }
+      } else {
+        useFallback();
+      }
+    } catch {
+      useFallback();
+    }
   };
 
   const spawnBubble = useCallback(() => {
     if (isVictory) return;
     const isTarget = Math.random() > 0.4;
     const color = isTarget ? targetColor : COLORS[Math.floor(Math.random() * COLORS.length)];
-    const newBubble = { id: Date.now() + Math.random(), color, x: 10 + Math.random() * 80 };
-    setBubbles(prev => [...prev.slice(-12), newBubble]);
+    const x = 20 + Math.random() * 60;
+    const newBubble = { id: Date.now() + Math.random(), color, x };
+    setBubbles(prev => [...prev.slice(-10), newBubble]);
   }, [targetColor, isVictory]);
 
   useEffect(() => {
-    const interval = setInterval(spawnBubble, 1500);
+    const interval = setInterval(spawnBubble, 1400);
     const timer = setTimeout(() => speak(targetColor.label), 500);
     return () => { clearInterval(interval); clearTimeout(timer); };
-  }, [targetColor]);
+  }, [targetColor, spawnBubble]);
 
   const handlePop = (id: number, colorId: string) => {
-    initAudioContext().resume();
+    const ctx = initAudioContext();
+    if (ctx.state === 'suspended') ctx.resume();
+    
     if (colorId === targetColor.id) {
       popSfx.play();
       addScore(15);
@@ -121,30 +144,49 @@ const BubblePop: React.FC = () => {
   };
 
   return (
-    <div className="h-full w-full bg-gradient-to-b from-cyan-400 to-blue-600 overflow-hidden flex flex-col items-center p-4 relative" onClick={() => !isSpeaking && speak(targetColor.label)}>
+    <div className="h-full w-full bg-gradient-to-b from-cyan-400 to-blue-600 overflow-hidden flex flex-col items-center p-4 relative safe-pb safe-pt" onClick={() => initAudioContext().resume()}>
       <Confetti active={isVictory} />
-      <div className="absolute top-4 left-4 z-20">
-        <div className="bg-white/20 backdrop-blur-md px-6 py-2 rounded-full font-black text-white text-sm border border-white/30">🫧 {progress}/5</div>
+      
+      <div className="absolute top-6 left-6 z-20">
+        <div className="bg-white/20 backdrop-blur-md px-4 py-1.5 rounded-full font-black text-white text-sm border border-white/20">
+          🫧 {progress}/5
+        </div>
       </div>
-      <motion.button key={targetColor.id} onClick={(e) => { e.stopPropagation(); speak(targetColor.label); }} className="z-30 mt-10 bg-white px-12 py-6 rounded-[3rem] shadow-2xl flex flex-col items-center border-4 border-white active:scale-95 transition-all">
-        <Volume2 className={isSpeaking ? "text-blue-500 animate-pulse" : "text-slate-200"} size={40} />
-        <span className="text-4xl md:text-5xl font-black mt-2" style={{ color: targetColor.hex }}>{targetColor.label}</span>
+
+      <motion.button 
+        key={targetColor.id} 
+        onClick={() => speak(targetColor.label)} 
+        className="z-30 mt-8 bg-white px-8 py-4 md:px-12 md:py-6 rounded-2xl md:rounded-[3rem] shadow-2xl flex flex-col items-center border-4 border-white active:scale-95 mx-4"
+      >
+        <Volume2 className={isSpeaking ? "text-blue-500 animate-pulse" : "text-slate-300"} size={32} />
+        <span className="text-2xl md:text-5xl font-black mt-1" style={{ color: targetColor.hex }}>{targetColor.label}</span>
       </motion.button>
+
       <div className="flex-1 w-full relative">
         <AnimatePresence>
           {bubbles.map((b) => (
-            <motion.button key={b.id} initial={{ y: 800, opacity: 0 }} animate={{ y: -200, opacity: 1 }} exit={{ scale: 3, opacity: 0 }} transition={{ duration: 10, ease: "linear" }} onClick={(e) => { e.stopPropagation(); handlePop(b.id, b.color.id); }} className="absolute w-24 h-24 md:w-32 md:h-32 rounded-full shadow-inner border-2 border-white/40 flex items-center justify-center cursor-pointer active:scale-150 z-20" style={{ left: `${b.x}%`, backgroundColor: `${b.color.hex}66`, boxShadow: `inset 0 0 15px ${b.color.hex}, 0 10px 20px rgba(0,0,0,0.1)` }}>
-              <div className="absolute top-3 left-6 w-5 h-2.5 bg-white/30 rounded-full rotate-45" />
+            <motion.button 
+              key={b.id} 
+              initial={{ y: "110dvh", opacity: 0 }} 
+              animate={{ y: "-20dvh", opacity: 1 }} 
+              exit={{ scale: 2, opacity: 0 }} 
+              transition={{ duration: 8, ease: "linear" }} 
+              onClick={(e) => { e.stopPropagation(); handlePop(b.id, b.color.id); }} 
+              className="absolute w-20 h-20 md:w-32 md:h-32 rounded-full shadow-inner border-2 border-white/30 flex items-center justify-center cursor-pointer active:scale-125 z-20" 
+              style={{ left: `${b.x}%`, backgroundColor: `${b.color.hex}55`, boxShadow: `inset 0 0 15px ${b.color.hex}, 0 5px 15px rgba(0,0,0,0.1)` }}
+            >
+              <div className="absolute top-2 left-4 w-4 h-2 bg-white/40 rounded-full rotate-45" />
             </motion.button>
           ))}
         </AnimatePresence>
       </div>
+
       {isVictory && (
-        <div className="fixed inset-0 z-[110] bg-blue-900/80 backdrop-blur-lg flex items-center justify-center p-6">
-          <motion.div initial={{ scale: 0.5 }} animate={{ scale: 1 }} className="bg-white p-12 rounded-[4rem] text-center shadow-2xl max-w-sm w-full flex flex-col items-center gap-8 border-8 border-blue-400">
+        <div className="fixed inset-0 z-[110] bg-blue-900/90 backdrop-blur-sm flex items-center justify-center p-6 text-center">
+          <motion.div initial={{ scale: 0.8 }} animate={{ scale: 1 }} className="bg-white p-10 rounded-[2.5rem] shadow-2xl flex flex-col items-center gap-6 max-w-xs w-full border-4 border-blue-400">
             <div className="text-8xl">🐳</div>
-            <h2 className="text-4xl font-black text-slate-800 uppercase leading-none">Splash Hero!</h2>
-            <button onClick={(e) => { e.stopPropagation(); navigate('/map'); }} className="w-full bg-blue-500 text-white text-2xl font-black py-6 rounded-3xl shadow-[0_8px_0_0_#1E40AF] active:translate-y-1 transition-all">GO TO MAP <ChevronRight className="inline" /></button>
+            <h2 className="text-3xl font-black text-slate-800 uppercase leading-none">Splash Hero!</h2>
+            <button onClick={() => navigate('/map')} className="w-full bg-blue-500 text-white text-xl font-black py-5 rounded-2xl">CONTINUE <ChevronRight className="inline" /></button>
           </motion.div>
         </div>
       )}

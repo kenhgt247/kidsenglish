@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -59,16 +60,31 @@ const ArcticOpposites: React.FC = () => {
   };
 
   const speak = async (text: string) => {
-    if (isSpeaking || !process.env.API_KEY) return;
+    if (isSpeaking) return;
+    const phrase = `Is the ${text} hot or cold?`;
+
+    const useFallback = () => {
+      setIsSpeaking(true);
+      const utterance = new SpeechSynthesisUtterance(phrase);
+      utterance.lang = 'en-GB';
+      utterance.onend = () => setIsSpeaking(false);
+      utterance.onerror = () => setIsSpeaking(false);
+      window.speechSynthesis.speak(utterance);
+    };
+
+    if (!process.env.API_KEY) {
+      useFallback();
+      return;
+    }
+
     try {
       setIsSpeaking(true);
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-preview-tts',
-        contents: [{ parts: [{ text: `Is the ${text} hot or cold?` }] }],
+        contents: [{ parts: [{ text: phrase }] }],
         config: { 
           responseModalities: [Modality.AUDIO],
-          systemInstruction: "You are a warm, clear British English teacher for toddlers. Use a friendly UK accent. Speak slowly and clearly. Encourage the child.",
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } }
         }
       });
@@ -82,8 +98,12 @@ const ArcticOpposites: React.FC = () => {
          source.connect(ctx.destination);
          source.onended = () => setIsSpeaking(false);
          source.start();
-      } else setIsSpeaking(false);
-    } catch { setIsSpeaking(false); }
+      } else {
+        useFallback();
+      }
+    } catch {
+      useFallback();
+    }
   };
 
   const nextItem = () => {
@@ -99,7 +119,8 @@ const ArcticOpposites: React.FC = () => {
   }, [currentItem]);
 
   const handleSelect = (type: string) => {
-    initAudioContext().resume();
+    const ctx = initAudioContext();
+    if (ctx.state === 'suspended') ctx.resume();
     if (feedback !== null) return;
     if (type === currentItem.type) {
       correctSfx.play();
@@ -122,7 +143,11 @@ const ArcticOpposites: React.FC = () => {
   };
 
   return (
-    <div className="h-full bg-blue-50 overflow-hidden flex flex-col p-8 relative" onClick={() => !isSpeaking && speak(currentItem.label)}>
+    <div className="h-full bg-blue-50 overflow-hidden flex flex-col p-8 relative" onClick={() => {
+      const ctx = initAudioContext();
+      if (ctx.state === 'suspended') ctx.resume();
+      if (!isSpeaking) speak(currentItem.label);
+    }}>
       <Confetti active={isVictory} />
       <div className="absolute top-4 left-4 z-10 bg-blue-600/20 px-6 py-2 rounded-full font-black text-blue-700 text-sm">❄️ {progress}/6</div>
       <div className="flex-1 flex flex-col md:flex-row items-center justify-center gap-16 z-10">
@@ -156,7 +181,7 @@ const ArcticOpposites: React.FC = () => {
           <motion.div initial={{ scale: 0.5 }} animate={{ scale: 1 }} className="bg-white p-12 rounded-[4rem] shadow-2xl max-w-sm w-full border-8 border-cyan-400 flex flex-col items-center gap-8">
             <div className="text-8xl animate-bounce">🐧</div>
             <h2 className="text-4xl font-black text-blue-900 uppercase">Ice Master!</h2>
-            <button onClick={(e) => { e.stopPropagation(); navigate('/map'); }} className="w-full bg-cyan-600 text-white text-2xl font-black py-6 rounded-3xl shadow-[0_10px_0_0_#0891B2] active:translate-y-1 transition-all">COOL! <ChevronRight className="inline" /></button>
+            <button onClick={(e) => { e.stopPropagation(); navigate('/map'); }} className="w-full bg-cyan-600 text-white text-2xl font-black py-4 rounded-2xl">COOL! <ChevronRight className="inline" /></button>
           </motion.div>
         </div>
       )}

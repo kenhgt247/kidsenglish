@@ -29,16 +29,13 @@ function decodeBase64(base64: string) {
 }
 
 async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
-  const numSamples = Math.floor(data.byteLength / 2);
-  const frameCount = Math.floor(numSamples / numChannels);
+  const dataInt16 = new Int16Array(data.buffer, data.byteOffset, data.byteLength / 2);
+  const frameCount = dataInt16.length / numChannels;
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
-  const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
   for (let channel = 0; channel < numChannels; channel++) {
     const channelData = buffer.getChannelData(channel);
     for (let i = 0; i < frameCount; i++) {
-      const sampleIndex = (i * numChannels + channel) * 2;
-      const sample = dataView.getInt16(sampleIndex, true);
-      channelData[i] = sample / 32768.0;
+      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
     }
   }
   return buffer;
@@ -73,15 +70,15 @@ const DinoDressUp: React.FC = () => {
         contents: [{ parts: [{ text: `Can you help me put on my ${itemName}?` }] }],
         config: { 
           responseModalities: [Modality.AUDIO],
-          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } } }
+          systemInstruction: "You are a warm, clear British English teacher for toddlers. Use a friendly UK accent.",
+          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } }
         }
       });
       const audioPart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.data);
-      const base64 = audioPart?.inlineData?.data;
-      if (base64) {
+      if (audioPart?.inlineData?.data) {
          const ctx = initAudioContext();
          if (ctx.state === 'suspended') await ctx.resume();
-         const buffer = await decodeAudioData(decodeBase64(base64), ctx, 24000, 1);
+         const buffer = await decodeAudioData(decodeBase64(audioPart.inlineData.data), ctx, 24000, 1);
          const source = ctx.createBufferSource();
          source.buffer = buffer;
          source.connect(ctx.destination);
@@ -98,7 +95,7 @@ const DinoDressUp: React.FC = () => {
   const checkProximity = (point: { x: number, y: number }) => {
     const dinoRect = dinoContainerRef.current?.getBoundingClientRect();
     if (!dinoRect) return;
-    const threshold = 150; // slightly larger for feedback
+    const threshold = 150;
     const dinoCenterX = dinoRect.left + dinoRect.width / 2;
     const dinoCenterY = dinoRect.top + dinoRect.height / 2;
     const distance = Math.sqrt(Math.pow(point.x - dinoCenterX, 2) + Math.pow(point.y - dinoCenterY, 2));
@@ -134,7 +131,7 @@ const DinoDressUp: React.FC = () => {
   return (
     <div 
       className="h-full bg-slate-100 overflow-hidden flex flex-col p-4 md:p-8 relative"
-      onClick={() => { if(dressedItems.length === 0 && !isSpeaking) speak(currentTarget.label.toLowerCase()); }}
+      onClick={() => initAudioContext().resume()}
     >
       <Confetti active={isVictory} />
       <div className="flex-1 flex flex-row items-center justify-around z-10 gap-4">
@@ -176,7 +173,6 @@ const DinoDressUp: React.FC = () => {
             <span className="text-[10rem] md:text-[18rem] select-none">🦖</span>
             
             <AnimatePresence>
-              {/* Ghost Preview */}
               {isNearTarget && !dressedItems.includes(currentTarget.id) && (
                 <motion.div
                   key="preview"
@@ -190,7 +186,6 @@ const DinoDressUp: React.FC = () => {
                 </motion.div>
               )}
 
-              {/* Dressed Items */}
               {CLOTHING.map(item => dressedItems.includes(item.id) && (
                 <motion.div key={`dressed-${item.id}`} initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1.4, opacity: 1 }} className="absolute z-20 pointer-events-none drop-shadow-2xl" style={item.targetPos}>
                   <span className="text-5xl md:text-7xl">{item.icon}</span>
@@ -202,7 +197,7 @@ const DinoDressUp: React.FC = () => {
       </div>
       {isVictory && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-2xl z-[150] flex items-center justify-center p-6 text-center">
-          <motion.div initial={{ scale: 0.5 }} animate={{ scale: 1 }} className="bg-white p-12 rounded-[5rem] shadow-2xl max-w-sm w-full border-[12px] border-emerald-400 flex flex-col items-center gap-8">
+          <motion.div initial={{ scale: 0.5 }} animate={{ scale: 1 }} className="bg-white p-12 rounded-[5rem] shadow-2xl max-sm w-full border-[12px] border-emerald-400 flex flex-col items-center gap-8">
              <div className="text-9xl animate-spin-slow">🕶️</div>
              <h2 className="text-4xl font-black text-slate-800 uppercase tracking-tighter">Super Stylish!</h2>
              <button onClick={() => navigate('/map')} className="w-full bg-emerald-500 text-white text-3xl font-black py-6 rounded-[2.5rem] shadow-[0_12px_0_0_#059669] active:translate-y-1 transition-all">AWESOME!</button>

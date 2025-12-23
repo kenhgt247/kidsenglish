@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -8,10 +7,10 @@ import { useGame } from '../GameContext.tsx';
 import Confetti from '../components/Confetti.tsx';
 
 const PARTS = [
-  { id: 'nose', label: 'NOSE', pos: 'top-[45%] left-[48%]', prompt: 'Touch the dog\'s nose!' },
-  { id: 'ears', label: 'EARS', pos: 'top-[15%] left-[30%]', prompt: 'Touch the dog\'s ears!' },
-  { id: 'tail', label: 'TAIL', pos: 'top-[60%] right-[10%]', prompt: 'Touch the dog\'s tail!' },
-  { id: 'paws', label: 'PAWS', pos: 'bottom-[10%] left-[40%]', prompt: 'Touch the dog\'s paws!' },
+  { id: 'nose', label: 'NOSE', pos: 'top-[45%] left-[48%]', prompt: "Touch the dog's nose!" },
+  { id: 'ears', label: 'EARS', pos: 'top-[15%] left-[30%]', prompt: "Touch the dog's ears!" },
+  { id: 'tail', label: 'TAIL', pos: 'top-[60%] right-[10%]', prompt: "Touch the dog's tail!" },
+  { id: 'paws', label: 'PAWS', pos: 'bottom-[10%] left-[40%]', prompt: "Touch the dog's paws!" },
 ];
 
 function decodeBase64(base64: string) {
@@ -22,16 +21,13 @@ function decodeBase64(base64: string) {
 }
 
 async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
-  const numSamples = Math.floor(data.byteLength / 2);
-  const frameCount = Math.floor(numSamples / numChannels);
+  const dataInt16 = new Int16Array(data.buffer, data.byteOffset, data.byteLength / 2);
+  const frameCount = dataInt16.length / numChannels;
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
-  const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
   for (let channel = 0; channel < numChannels; channel++) {
     const channelData = buffer.getChannelData(channel);
     for (let i = 0; i < frameCount; i++) {
-      const sampleIndex = (i * numChannels + channel) * 2;
-      const sample = dataView.getInt16(sampleIndex, true);
-      channelData[i] = sample / 32768.0;
+      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
     }
   }
   return buffer;
@@ -55,20 +51,35 @@ const PetParlor: React.FC = () => {
   };
 
   const speak = async (txt: string) => {
-    if (isSpeaking || !process.env.API_KEY) return;
+    if (isSpeaking) return;
+    const phrase = txt;
+
+    const useFallback = () => {
+      setIsSpeaking(true);
+      const utterance = new SpeechSynthesisUtterance(phrase);
+      utterance.lang = 'en-GB';
+      utterance.onend = () => setIsSpeaking(false);
+      utterance.onerror = () => setIsSpeaking(false);
+      window.speechSynthesis.speak(utterance);
+    };
+
+    if (!process.env.API_KEY) {
+      useFallback();
+      return;
+    }
+
     try {
       setIsSpeaking(true);
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-preview-tts',
-        contents: [{ parts: [{ text: txt }] }],
+        contents: [{ parts: [{ text: phrase }] }],
         config: { 
           responseModalities: [Modality.AUDIO],
-          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } }
+          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } }
         }
       });
-      const audioPart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.data);
-      const base64 = audioPart?.inlineData?.data;
+      const base64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
       if (base64) {
          const ctx = initAudioContext();
          if (ctx.state === 'suspended') await ctx.resume();
@@ -78,8 +89,8 @@ const PetParlor: React.FC = () => {
          source.connect(ctx.destination);
          source.onended = () => setIsSpeaking(false);
          source.start();
-      } else { setIsSpeaking(false); }
-    } catch { setIsSpeaking(false); }
+      } else { useFallback(); }
+    } catch { useFallback(); }
   };
 
   const nextRound = () => {
@@ -104,7 +115,7 @@ const PetParlor: React.FC = () => {
   return (
     <div 
       className="h-full bg-emerald-50 flex flex-col items-center justify-center p-8 relative overflow-hidden"
-      onClick={() => { if(progress === 0 && !isSpeaking) speak(target.prompt); }}
+      onClick={() => initAudioContext().resume()}
     >
       <Confetti active={isVictory} />
       <div className="absolute top-4 left-4 bg-emerald-600 text-white px-4 py-1 rounded-full font-black uppercase text-xs">Pet Parlor: {progress}/4</div>

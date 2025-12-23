@@ -54,16 +54,32 @@ const WeatherWatch: React.FC = () => {
   };
 
   const speak = async (txt: string) => {
-    if (isSpeaking || !process.env.API_KEY) return;
+    if (isSpeaking) return;
+    const phrase = `${txt} What do we need?`;
+
+    const useFallback = () => {
+      setIsSpeaking(true);
+      const utterance = new SpeechSynthesisUtterance(phrase);
+      utterance.lang = 'en-GB';
+      utterance.onend = () => setIsSpeaking(false);
+      utterance.onerror = () => setIsSpeaking(false);
+      window.speechSynthesis.speak(utterance);
+    };
+
+    if (!process.env.API_KEY) {
+      useFallback();
+      return;
+    }
+
     try {
       setIsSpeaking(true);
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-preview-tts',
-        contents: [{ parts: [{ text: `${txt} What do we need?` }] }],
+        contents: [{ parts: [{ text: phrase }] }],
         config: { 
           responseModalities: [Modality.AUDIO],
-          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } }
+          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } }
         }
       });
       const audioPart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.data);
@@ -77,8 +93,12 @@ const WeatherWatch: React.FC = () => {
          source.connect(ctx.destination);
          source.onended = () => setIsSpeaking(false);
          source.start();
-      } else { setIsSpeaking(false); }
-    } catch { setIsSpeaking(false); }
+      } else {
+        useFallback();
+      }
+    } catch (e) {
+      useFallback();
+    }
   };
 
   const nextRound = () => {
@@ -90,7 +110,8 @@ const WeatherWatch: React.FC = () => {
   useEffect(() => { nextRound(); }, []);
 
   const handleSelect = (item: string) => {
-    initAudioContext().resume();
+    const ctx = initAudioContext();
+    if (ctx.state === 'suspended') ctx.resume();
     if (item === current.target) {
       addScore(50);
       const n = progress + 1;
@@ -103,7 +124,11 @@ const WeatherWatch: React.FC = () => {
   return (
     <div 
       className="h-full bg-sky-100 flex flex-col items-center justify-center p-8 relative"
-      onClick={() => { if(progress === 0 && !isSpeaking) speak(current.prompt); }}
+      onClick={() => {
+        const ctx = initAudioContext();
+        if (ctx.state === 'suspended') ctx.resume();
+        if(!isSpeaking) speak(current.prompt);
+      }}
     >
       <Confetti active={isVictory} />
       <div className="absolute top-4 left-4 z-10 bg-white/50 px-4 py-1 rounded-full text-sky-700 font-black">WEATHER: {progress}/5</div>
@@ -137,7 +162,7 @@ const WeatherWatch: React.FC = () => {
           <motion.div initial={{ scale: 0.5 }} animate={{ scale: 1 }} className="bg-white p-10 rounded-[3rem] border-8 border-sky-400">
             <div className="text-8xl mb-4">🌦️</div>
             <h2 className="text-3xl font-black text-sky-900 uppercase">Weather Expert!</h2>
-            <button onClick={() => navigate('/map')} className="w-full mt-6 bg-sky-600 text-white text-2xl font-black py-4 rounded-2xl">CONTINUE</button>
+            <button onClick={(e) => { e.stopPropagation(); navigate('/map'); }} className="w-full mt-6 bg-sky-600 text-white text-2xl font-black py-4 rounded-2xl">CONTINUE</button>
           </motion.div>
         </div>
       )}

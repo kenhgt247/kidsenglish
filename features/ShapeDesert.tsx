@@ -7,7 +7,7 @@ import { useGame } from '../GameContext.tsx';
 import Confetti from '../components/Confetti.tsx';
 import { Howl } from 'howler';
 
-const matchSfx = new Howl({ src: ['https://assets.mixkit.co/active_storage/sfx/2040/2040-preview.mp3'], volume: 0.6 });
+const matchSfx = new Howl({ src: ['https://actions.google.com/sounds/v1/cartoon/pop.ogg'], volume: 0.6 });
 
 const SHAPES = [
   { id: 'square', label: 'SQUARE', icon: <Square size={64} />, color: 'bg-red-500' },
@@ -55,16 +55,31 @@ const ShapeDesert: React.FC = () => {
   };
 
   const speak = async (text: string) => {
-    if (isSpeaking || !process.env.API_KEY) return;
+    if (isSpeaking) return;
+    const phrase = `Where is the ${text} shape?`;
+
+    const useFallback = () => {
+      setIsSpeaking(true);
+      const utterance = new SpeechSynthesisUtterance(phrase);
+      utterance.lang = 'en-GB';
+      utterance.onend = () => setIsSpeaking(false);
+      utterance.onerror = () => setIsSpeaking(false);
+      window.speechSynthesis.speak(utterance);
+    };
+
+    if (!process.env.API_KEY) {
+      useFallback();
+      return;
+    }
+
     try {
       setIsSpeaking(true);
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-preview-tts',
-        contents: [{ parts: [{ text: `Where is the ${text} shape?` }] }],
+        contents: [{ parts: [{ text: phrase }] }],
         config: { 
           responseModalities: [Modality.AUDIO],
-          systemInstruction: "You are a warm, clear British English teacher for toddlers. Use a friendly UK accent. Speak slowly and clearly. Encourage the child.",
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } }
         }
       });
@@ -78,8 +93,8 @@ const ShapeDesert: React.FC = () => {
          source.connect(ctx.destination);
          source.onended = () => setIsSpeaking(false);
          source.start();
-      } else setIsSpeaking(false);
-    } catch { setIsSpeaking(false); }
+      } else { useFallback(); }
+    } catch { useFallback(); }
   };
 
   const nextRound = () => {
@@ -110,7 +125,7 @@ const ShapeDesert: React.FC = () => {
   };
 
   return (
-    <div className="h-full bg-[#FEF3C7] overflow-hidden flex flex-col p-8 relative" onClick={() => !isSpeaking && speak(target.label)}>
+    <div className="h-full bg-[#FEF3C7] overflow-hidden flex flex-col p-8 relative" onClick={() => initAudioContext().resume()}>
       <Confetti active={isVictory} />
       <div className="absolute top-4 left-4 z-10 bg-white/50 backdrop-blur-sm px-6 py-2 rounded-full font-black text-amber-700 text-sm">🏜️ {progress}/5</div>
       <div className="flex-1 flex flex-col items-center justify-center gap-12 z-10">
@@ -131,7 +146,7 @@ const ShapeDesert: React.FC = () => {
       </div>
       {isVictory && (
         <div className="fixed inset-0 bg-amber-900/80 backdrop-blur-xl z-[100] flex items-center justify-center p-6 text-center">
-          <motion.div initial={{ scale: 0.5 }} animate={{ scale: 1 }} className="bg-white p-12 rounded-[4rem] shadow-2xl max-w-sm w-full border-8 border-amber-400 flex flex-col items-center gap-8">
+          <motion.div initial={{ scale: 0.5 }} animate={{ scale: 1 }} className="bg-white p-12 rounded-[4rem] shadow-2xl max-sm w-full border-8 border-amber-400 flex flex-col items-center gap-8">
             <div className="text-8xl">🏜️</div>
             <h2 className="text-4xl font-black text-slate-800 uppercase leading-none">Dune Master!</h2>
             <button onClick={(e) => { e.stopPropagation(); navigate('/map'); }} className="w-full bg-amber-500 text-white text-2xl font-black py-6 rounded-3xl shadow-[0_8px_0_0_#92400E] active:translate-y-1 transition-all">LET'S GO <ChevronRight className="inline" /></button>

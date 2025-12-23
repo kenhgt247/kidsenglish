@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Volume2 } from 'lucide-react';
@@ -13,6 +14,26 @@ const VERBS = [
   { id: 'swim', label: 'SWIM', icon: '🏊', motion: { x: [-30, 30, -30] } },
 ];
 
+function decodeBase64(base64: string) {
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+  return bytes;
+}
+
+async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
+  const dataInt16 = new Int16Array(data.buffer, data.byteOffset, data.byteLength / 2);
+  const frameCount = dataInt16.length / numChannels;
+  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+  for (let channel = 0; channel < numChannels; channel++) {
+    const channelData = buffer.getChannelData(channel);
+    for (let i = 0; i < frameCount; i++) {
+      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+    }
+  }
+  return buffer;
+}
+
 const VerbRun: React.FC = () => {
   const navigate = useNavigate();
   const { addScore, unlockLevel } = useGame();
@@ -20,6 +41,15 @@ const VerbRun: React.FC = () => {
   const [progress, setProgress] = useState(0);
   const [isVictory, setIsVictory] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
+
+  const initAudioContext = () => {
+    if (!audioContextRef.current) {
+      const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
+      audioContextRef.current = new AudioContextClass({ sampleRate: 24000 });
+    }
+    return audioContextRef.current;
+  };
 
   const speak = async (txt: string) => {
     if (isSpeaking || !process.env.API_KEY) return;
@@ -29,19 +59,17 @@ const VerbRun: React.FC = () => {
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-preview-tts',
         contents: [{ parts: [{ text: `Who is ${txt}ning?` }] }],
-        config: { responseModalities: [Modality.AUDIO], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } } }
+        config: { 
+          responseModalities: [Modality.AUDIO],
+          systemInstruction: "You are a warm, clear British English teacher for toddlers.",
+          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } } 
+        }
       });
-      const base64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-      if (base64) {
-        const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
-        const ctx = new AudioContextClass({ sampleRate: 24000 });
-        const binaryString = atob(base64);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
-        const buffer = ctx.createBuffer(1, Math.floor(bytes.byteLength / 2), 24000);
-        const channelData = buffer.getChannelData(0);
-        const dataView = new DataView(bytes.buffer);
-        for (let i = 0; i < buffer.length; i++) channelData[i] = dataView.getInt16(i * 2, true) / 32768.0;
+      const audioPart = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (audioPart) {
+        const ctx = initAudioContext();
+        if (ctx.state === 'suspended') await ctx.resume();
+        const buffer = await decodeAudioData(decodeBase64(audioPart), ctx, 24000, 1);
         const source = ctx.createBufferSource();
         source.buffer = buffer;
         source.connect(ctx.destination);
@@ -60,6 +88,7 @@ const VerbRun: React.FC = () => {
   useEffect(() => { nextRound(); }, []);
 
   const handleSelect = (id: string) => {
+    initAudioContext().resume();
     if (id === target.id) {
       addScore(50);
       const n = progress + 1;
@@ -70,7 +99,7 @@ const VerbRun: React.FC = () => {
   };
 
   return (
-    <div className="h-full bg-sky-50 flex flex-col items-center justify-center p-8 relative overflow-hidden" onClick={() => !isSpeaking && speak(target.label.toLowerCase())}>
+    <div className="h-full bg-sky-50 flex flex-col items-center justify-center p-8 relative overflow-hidden" onClick={() => initAudioContext().resume()}>
       <Confetti active={isVictory} />
       <div className="flex flex-col items-center gap-12 z-10 w-full max-w-4xl">
         <h2 className="text-4xl md:text-6xl font-black text-slate-800 uppercase text-center">Who is <span className="text-sky-600">{target.label}</span>?</h2>

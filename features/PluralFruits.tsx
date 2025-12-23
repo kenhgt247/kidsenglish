@@ -24,17 +24,13 @@ function decodeBase64(base64: string) {
 }
 
 async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
-  const numSamples = Math.floor(data.byteLength / 2);
-  const frameCount = Math.floor(numSamples / numChannels);
+  const dataInt16 = new Int16Array(data.buffer, data.byteOffset, data.byteLength / 2);
+  const frameCount = dataInt16.length / numChannels;
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
-  const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
-
   for (let channel = 0; channel < numChannels; channel++) {
     const channelData = buffer.getChannelData(channel);
     for (let i = 0; i < frameCount; i++) {
-      const sampleIndex = (i * numChannels + channel) * 2;
-      const sample = dataView.getInt16(sampleIndex, true);
-      channelData[i] = sample / 32768.0;
+      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
     }
   }
   return buffer;
@@ -60,34 +56,51 @@ const PluralFruits: React.FC = () => {
   };
 
   const speak = async (count: number, label: string) => {
-    if (isSpeaking || !process.env.API_KEY) return;
-    const txt = count === 1 ? `Find one ${label}!` : `Find two ${label}s!`;
+    if (isSpeaking) return;
+    const phrase = count === 1 ? `Find one ${label}!` : `Find two ${label}s!`;
+
+    const useFallback = () => {
+      setIsSpeaking(true);
+      const utterance = new SpeechSynthesisUtterance(phrase);
+      utterance.lang = 'en-GB';
+      utterance.onend = () => setIsSpeaking(false);
+      utterance.onerror = () => setIsSpeaking(false);
+      window.speechSynthesis.speak(utterance);
+    };
+
+    if (!process.env.API_KEY) {
+      useFallback();
+      return;
+    }
+
     try {
       setIsSpeaking(true);
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-preview-tts',
-        contents: [{ parts: [{ text: txt }] }],
+        contents: [{ parts: [{ text: phrase }] }],
         config: { 
           responseModalities: [Modality.AUDIO],
-          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } }
+          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } }
         }
       });
       
       const audioPart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.data);
-      const base64 = audioPart?.inlineData?.data;
-      
-      if (base64) {
+      if (audioPart?.inlineData?.data) {
          const ctx = initAudioContext();
          if (ctx.state === 'suspended') await ctx.resume();
-         const buffer = await decodeAudioData(decodeBase64(base64), ctx, 24000, 1);
+         const buffer = await decodeAudioData(decodeBase64(audioPart.inlineData.data), ctx, 24000, 1);
          const source = ctx.createBufferSource();
          source.buffer = buffer;
          source.connect(ctx.destination);
          source.onended = () => setIsSpeaking(false);
          source.start();
-      } else { setIsSpeaking(false); }
-    } catch { setIsSpeaking(false); }
+      } else {
+        useFallback();
+      }
+    } catch {
+      useFallback();
+    }
   };
 
   const nextRound = () => {
@@ -117,10 +130,7 @@ const PluralFruits: React.FC = () => {
   };
 
   return (
-    <div 
-      className="h-full bg-orange-50 flex flex-col items-center justify-center p-8 relative"
-      onClick={() => { if(progress === 0 && !isSpeaking) speak(targetCount, currentFruit.label.toLowerCase()); }}
-    >
+    <div className="h-full bg-orange-50 flex flex-col items-center justify-center p-8 relative" onClick={() => initAudioContext().resume()}>
       <Confetti active={isVictory} />
       <div className="absolute top-4 left-4 z-10 bg-white/50 px-4 py-1.5 rounded-full text-xs font-black text-orange-700">
         🍎 PLURALS: {progress}/{GOAL}

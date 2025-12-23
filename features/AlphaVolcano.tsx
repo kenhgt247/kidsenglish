@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Volume2, Flame } from 'lucide-react';
@@ -8,8 +7,8 @@ import { useNavigate } from 'react-router-dom';
 import Confetti from '../components/Confetti.tsx';
 import { Howl } from 'howler';
 
-const splashSfx = new Howl({ src: ['https://assets.mixkit.co/active_storage/sfx/1114/1114-preview.mp3'], volume: 0.5 });
-const winSfx = new Howl({ src: ['https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3'], volume: 0.7 });
+const splashSfx = new Howl({ src: ['https://actions.google.com/sounds/v1/cartoon/pop.ogg'], volume: 0.5 });
+const winSfx = new Howl({ src: ['https://actions.google.com/sounds/v1/cartoon/clapping_foley.ogg'], volume: 0.7 });
 
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
@@ -20,19 +19,14 @@ function decodeBase64(base64: string) {
   return bytes;
 }
 
-async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer | null> {
-  const numSamples = Math.floor(data.byteLength / 2);
-  const frameCount = Math.floor(numSamples / numChannels);
+async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
+  const dataInt16 = new Int16Array(data.buffer, data.byteOffset, data.byteLength / 2);
+  const frameCount = dataInt16.length / numChannels;
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
-  const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
   for (let channel = 0; channel < numChannels; channel++) {
     const channelData = buffer.getChannelData(channel);
     for (let i = 0; i < frameCount; i++) {
-      const sampleIndex = (i * numChannels + channel) * 2;
-      if (sampleIndex + 1 < data.byteLength) {
-        const sample = dataView.getInt16(sampleIndex, true);
-        channelData[i] = sample / 32768.0;
-      }
+      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
     }
   }
   return buffer;
@@ -57,13 +51,29 @@ const AlphaVolcano: React.FC = () => {
   };
 
   const speak = async (letter: string) => {
-    if (isSpeaking || !process.env.API_KEY) return;
+    if (isSpeaking) return;
+    const phrase = `Quick! Catch the letter ${letter}!`;
+
+    const useFallback = () => {
+      setIsSpeaking(true);
+      const utterance = new SpeechSynthesisUtterance(phrase);
+      utterance.lang = 'en-GB';
+      utterance.onend = () => setIsSpeaking(false);
+      utterance.onerror = () => setIsSpeaking(false);
+      window.speechSynthesis.speak(utterance);
+    };
+
+    if (!process.env.API_KEY) {
+      useFallback();
+      return;
+    }
+
     try {
       setIsSpeaking(true);
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Speak in a clear, friendly British accent: "Quick! Catch the letter ${letter}!"` }] }],
+        contents: [{ parts: [{ text: phrase }] }],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
@@ -74,15 +84,13 @@ const AlphaVolcano: React.FC = () => {
         const ctx = initAudioContext();
         if (ctx.state === 'suspended') await ctx.resume();
         const buffer = await decodeAudioData(decodeBase64(audioPart.inlineData.data), ctx, 24000, 1);
-        if (buffer) {
-          const source = ctx.createBufferSource();
-          source.buffer = buffer;
-          source.connect(ctx.destination);
-          source.onended = () => setIsSpeaking(false);
-          source.start();
-        } else { setIsSpeaking(false); }
-      } else { setIsSpeaking(false); }
-    } catch { setIsSpeaking(false); }
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        source.onended = () => setIsSpeaking(false);
+        source.start();
+      } else { useFallback(); }
+    } catch { useFallback(); }
   };
 
   const spawnLetter = useCallback(() => {
@@ -115,7 +123,7 @@ const AlphaVolcano: React.FC = () => {
   };
 
   return (
-    <div className="h-full w-full bg-orange-950 overflow-hidden flex flex-col items-center p-8 relative">
+    <div className="h-full w-full bg-orange-950 overflow-hidden flex flex-col items-center p-8 relative" onClick={() => initAudioContext().resume()}>
       <Confetti active={isVictory} />
       <div className="absolute top-4 left-4 z-20 bg-orange-600 px-6 py-2 rounded-full font-black text-white border-2 border-orange-400 shadow-xl">
         <Flame className="inline-block mr-2" size={20} /> {progress}/5

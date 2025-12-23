@@ -7,8 +7,8 @@ import { useNavigate } from 'react-router-dom';
 import Confetti from '../components/Confetti.tsx';
 import { Howl } from 'howler';
 
-const crackSfx = new Howl({ src: ['https://assets.mixkit.co/active_storage/sfx/2040/2040-preview.mp3'], volume: 0.6 });
-const winSfx = new Howl({ src: ['https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3'], volume: 0.7 });
+const crackSfx = new Howl({ src: ['https://actions.google.com/sounds/v1/cartoon/pop.ogg'], volume: 0.6 });
+const winSfx = new Howl({ src: ['https://actions.google.com/sounds/v1/cartoon/clapping_foley.ogg'], volume: 0.7 });
 
 function decodeBase64(base64: string) {
   const binaryString = atob(base64);
@@ -49,20 +49,35 @@ const EggCounter: React.FC = () => {
   };
 
   const speak = async (num: number) => {
-    if (isSpeaking || !process.env.API_KEY) return;
+    if (isSpeaking) return;
+    const phrase = `Can you find ${num} eggs for me?`;
+
+    const useFallback = () => {
+      setIsSpeaking(true);
+      const utterance = new SpeechSynthesisUtterance(phrase);
+      utterance.lang = 'en-GB';
+      utterance.onend = () => setIsSpeaking(false);
+      utterance.onerror = () => setIsSpeaking(false);
+      window.speechSynthesis.speak(utterance);
+    };
+
+    if (!process.env.API_KEY) {
+      useFallback();
+      return;
+    }
+
     try {
       setIsSpeaking(true);
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Can you find ${num} eggs for me?` }] }],
+        contents: [{ parts: [{ text: phrase }] }],
         config: {
           responseModalities: [Modality.AUDIO],
-          systemInstruction: "You are a warm, clear British English teacher for toddlers. Use a friendly UK accent. Speak slowly and clearly. Encourage the child.",
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
         },
       });
-      const base64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      const base64 = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.data)?.inlineData?.data;
       if (base64) {
         const ctx = initAudioContext();
         if (ctx.state === 'suspended') await ctx.resume();
@@ -72,8 +87,8 @@ const EggCounter: React.FC = () => {
         source.connect(ctx.destination);
         source.onended = () => setIsSpeaking(false);
         source.start();
-      } else setIsSpeaking(false);
-    } catch { setIsSpeaking(false); }
+      } else { useFallback(); }
+    } catch { useFallback(); }
   };
 
   const startRound = useCallback(() => {
@@ -111,7 +126,7 @@ const EggCounter: React.FC = () => {
   };
 
   return (
-    <div className="h-full w-full bg-[#FDF4E3] overflow-hidden flex flex-col items-center p-8 relative" onClick={() => !isSpeaking && speak(targetCount)}>
+    <div className="h-full w-full bg-[#FDF4E3] overflow-hidden flex flex-col items-center p-8 relative" onClick={() => initAudioContext().resume()}>
       <Confetti active={isVictory} />
       <div className="absolute top-4 left-4 z-10">
         <div className="bg-white/80 px-6 py-2 rounded-full font-black text-amber-700 text-sm border border-amber-200">🥚 {progress}/5</div>
